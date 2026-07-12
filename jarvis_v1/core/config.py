@@ -3,9 +3,11 @@ Configuration management for Jarvis v1
 """
 
 from __future__ import annotations
+
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
 import yaml
 
 
@@ -166,7 +168,7 @@ class Config:
     mode: str = "wake"
 
     @classmethod
-    def load(cls, path: Path) -> "Config":
+    def load(cls, path: Path) -> Config:
         config = cls()
 
         if path.exists():

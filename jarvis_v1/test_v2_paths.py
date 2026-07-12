@@ -13,9 +13,9 @@ import sys
 
 sys.path.insert(0, ".")
 
+from action.fast_router import FastRouter
 from cognition.agent_state import AgentState
 from cognition.decision_engine import DecisionEngine
-from action.fast_router import FastRouter, RouteResult
 
 PASS = "\033[32mPASS\033[0m"
 FAIL = "\033[31mFAIL\033[0m"
@@ -124,7 +124,7 @@ async def run_tests() -> None:
 
     # ── Print results ─────────────────────────────────────────────────────────
     print(f"\n{'-'*60}")
-    print(f"  JARVIS V2 -- Decision Path Tests")
+    print("  JARVIS V2 -- Decision Path Tests")
     print(f"{'-'*60}")
 
     current_path = None

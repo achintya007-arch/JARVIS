@@ -41,26 +41,24 @@ import logging
 import random
 import re
 from datetime import datetime
-from typing import Optional
 
-from core.config import Config
-from perception.stt import STTEngine
-from perception.tts import TTSEngine
-from perception.hotword import HotwordDetector
-from cognition.llm_client import LLMClient
-from cognition.context_manager import ContextManager
+from action.agent_executor import AgentExecutor
+from action.fast_router import FastRouter
 from cognition.agent_core import AgentCore
 from cognition.agent_core.planner import TOOL_SCHEMAS
 from cognition.agent_state import AgentState
+from cognition.context_manager import ContextManager
 from cognition.decision_engine import (
-    DecisionEngine,
-    Decision,
-    PRIORITY_CRITICAL,
     PRIORITY_HIGH,
+    Decision,
+    DecisionEngine,
 )
-from action.agent_executor import AgentExecutor
-from action.fast_router import FastRouter
+from cognition.llm_client import LLMClient
+from core.config import Config
 from infra.resource_monitor import ResourceMonitor
+from perception.hotword import HotwordDetector
+from perception.stt import STTEngine
+from perception.tts import TTSEngine
 
 log = logging.getLogger("jarvis.assistant")
 
@@ -133,7 +131,7 @@ class Assistant:
         )
 
         self._running = False
-        self._internal_loop_task: Optional[asyncio.Task] = None
+        self._internal_loop_task: asyncio.Task | None = None
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 

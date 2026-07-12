@@ -21,20 +21,18 @@ import asyncio
 import json
 import logging
 import re
-import time
 import uuid
-from typing import Optional
 
 import aiosqlite
 
 from action.fast_router import FastRouter
-from cognition.goal import Goal
 from cognition.agent_state import AgentState
+from cognition.goal import Goal
 from core_common.event_bus import EventBus
 from core_common.events import (
-    SpeakRequest,
-    ActionSuggestion,
     PRIORITY_IMPORTANT,
+    ActionSuggestion,
+    SpeakRequest,
 )
 
 log = logging.getLogger("jarvis.goals")
@@ -92,7 +90,7 @@ class GoalManager:
 
     def __init__(
         self,
-        db_path: Optional[str],
+        db_path: str | None,
         agent_state: AgentState,
         bus: EventBus,
         vault=None,
@@ -105,7 +103,7 @@ class GoalManager:
         self._bus         = bus
         self._vault       = vault
         self._router      = FastRouter()        # stateless — used to test goal actionability
-        self._db: Optional[aiosqlite.Connection] = None
+        self._db: aiosqlite.Connection | None = None
         self._running     = False
 
         # NOTE: goal detection is driven SYNCHRONOUSLY by the Brain via
@@ -190,7 +188,7 @@ class GoalManager:
 
     # ── Input handling (called synchronously by the Brain) ────────────────────
 
-    async def handle_input(self, text: str) -> Optional[str]:
+    async def handle_input(self, text: str) -> str | None:
         """
         Detect and act on a goal creation/completion in the utterance.
 
@@ -219,7 +217,7 @@ class GoalManager:
 
     # ── Detection ─────────────────────────────────────────────────────────────
 
-    def _detect_goal_creation(self, text: str) -> Optional[tuple[str, int, dict]]:
+    def _detect_goal_creation(self, text: str) -> tuple[str, int, dict] | None:
         stripped = text.strip().rstrip(".!?")
         if _NOT_GOAL_RE.match(stripped):
             return None
@@ -232,7 +230,7 @@ class GoalManager:
                 return name, priority, {}
         return None
 
-    def _detect_goal_completion(self, text: str) -> Optional[str]:
+    def _detect_goal_completion(self, text: str) -> str | None:
         """
         Return the matching active goal name if the utterance signals completion,
         or None if nothing matches.  Tries two syntactic forms:
@@ -256,7 +254,7 @@ class GoalManager:
 
         return None
 
-    def _fuzzy_match_goal(self, phrase: str) -> Optional[str]:
+    def _fuzzy_match_goal(self, phrase: str) -> str | None:
         """
         Bidirectional word-overlap match against active goal names.
 
@@ -409,7 +407,7 @@ class GoalManager:
     def _vault_write_lines(self, lines: list[str]) -> None:
         # Rewrite with a clean, consistent header. Any prior heading/blank lines
         # are dropped and re-added so goals.md stays tidy in Obsidian.
-        tasks = [l for l in lines if l.strip() and not l.lstrip().startswith("#")]
+        tasks = [ln for ln in lines if ln.strip() and not ln.lstrip().startswith("#")]
         body = "# Goals\n\n" + ("\n".join(tasks) + "\n" if tasks else "")
         self._vault.write(self._vault.goals_path, body)
 
@@ -453,7 +451,7 @@ class GoalManager:
                     pass
         if not replaced:
             lines.append(new_line)
-        self._vault_write_lines([l for l in lines if l.strip()])
+        self._vault_write_lines([ln for ln in lines if ln.strip()])
 
     def _vault_set_status(self, goal_id: str, status: str) -> None:
         lines = self._vault_read_lines()
@@ -476,4 +474,4 @@ class GoalManager:
             data["status"] = status
             box = "x" if status == "completed" else " "
             out.append(f"- [{box}] {m.group('name')} <!--jarvis {json.dumps(data, separators=(',', ':'))}-->")
-        self._vault_write_lines([l for l in out if l.strip()])
+        self._vault_write_lines([ln for ln in out if ln.strip()])

@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Optional
 
 from memory.embeddings import OllamaEmbedder
 
@@ -65,7 +64,7 @@ class WebRAG:
     def ready(self) -> bool:
         return self._ready
 
-    async def query(self, text: str, n: Optional[int] = None) -> list[str]:
+    async def query(self, text: str, n: int | None = None) -> list[str]:
         """Return up to n web-knowledge snippets above the similarity floor."""
         if not self._ready:
             return []
@@ -90,7 +89,7 @@ class WebRAG:
 
         min_score = getattr(self._cfg, "min_score", 0.55)
         out: list[str] = []
-        for doc, dist, meta in zip(docs, dists, metas):
+        for doc, dist, meta in zip(docs, dists, metas, strict=False):
             # Chroma cosine distance ≈ 1 - cosine_similarity for unit vectors.
             if (1.0 - dist) < min_score:
                 continue

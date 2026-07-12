@@ -9,9 +9,9 @@ Ported from claw-code:
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Literal
-
 
 StopReason = Literal["done", "max_turns", "error"]
 
@@ -38,7 +38,7 @@ class UsageSummary:
     input_tokens: int = 0
     output_tokens: int = 0
 
-    def add(self, input_tokens: int, output_tokens: int) -> "UsageSummary":
+    def add(self, input_tokens: int, output_tokens: int) -> UsageSummary:
         return UsageSummary(
             input_tokens=self.input_tokens + input_tokens,
             output_tokens=self.output_tokens + output_tokens,

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -225,7 +224,7 @@ class FastRouter:
             return None
         return self._route_single(text)
 
-    def _route_single(self, text: str) -> Optional[RouteResult]:
+    def _route_single(self, text: str) -> RouteResult | None:
         """Single-intent routing on already-normalized text."""
 
         if self._TIME.search(text):
@@ -339,7 +338,7 @@ class FastRouter:
 
     # ── Duration parser ───────────────────────────────────────────────────────
 
-    def _parse_duration(self, text: str) -> Optional[int]:
+    def _parse_duration(self, text: str) -> int | None:
         """
         "10 minutes"          → 600
         "2 hours 30 minutes"  → 9000

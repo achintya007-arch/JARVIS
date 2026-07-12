@@ -23,7 +23,6 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 log = logging.getLogger("jarvis.screen")
 
@@ -116,7 +115,7 @@ class ScreenTool:
 
     # ── Screenshot ────────────────────────────────────────────────────────────
 
-    async def screenshot(self, region: Optional[tuple[int, int, int, int]] = None) -> str:
+    async def screenshot(self, region: tuple[int, int, int, int] | None = None) -> str:
         """
         Capture the screen (or a region) and save to disk.
         Returns the saved file path as a string — pass to vision model.
@@ -144,8 +143,8 @@ class ScreenTool:
 
     async def click(
         self,
-        x: Optional[int] = None,
-        y: Optional[int] = None,
+        x: int | None = None,
+        y: int | None = None,
         button: str = "left",
         clicks: int = 1,
     ) -> str:
@@ -179,7 +178,7 @@ class ScreenTool:
         await asyncio.to_thread(pyautogui.moveTo, x, y, duration=duration)
         return f"Mouse moved to ({x}, {y})."
 
-    async def scroll(self, clicks: int, x: Optional[int] = None, y: Optional[int] = None) -> str:
+    async def scroll(self, clicks: int, x: int | None = None, y: int | None = None) -> str:
         """
         Scroll at (x, y) or current position.
         Positive clicks = scroll up, negative = scroll down.
@@ -381,7 +380,8 @@ class ScreenTool:
 
         def _copy() -> str:
             pyautogui.hotkey("ctrl", "c")
-            import time; time.sleep(0.15)
+            import time
+            time.sleep(0.15)
             try:
                 import subprocess
                 result = subprocess.run(

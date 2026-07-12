@@ -27,49 +27,44 @@ import random
 import re
 import time
 from datetime import datetime
-from typing import Optional
 
-from core.config import Config
-from cognition.agent_state import AgentState
-from cognition.decision_engine import (
-    DecisionEngine,
-    Decision,
-    PRIORITY_HIGH,
-)
-from cognition.llm_client import LLMClient, build_system_prompt
-from cognition.goal_manager import GoalManager
+from action.agent_executor import AgentExecutor
+from action.fast_router import FastRouter
+from action.obsidian_tools import ObsidianTools
 from cognition.agent_core import AgentCore
 from cognition.agent_core.planner import TOOL_SCHEMAS
-from action.agent_executor import AgentExecutor
-from action.obsidian_tools import ObsidianTools
-from action.fast_router import FastRouter
-from memory.vault_memory import VaultMemory
-from perception.stt import STTEngine
-from perception.tts import TTSEngine
-from perception.hotword import HotwordDetector
-from infra.resource_monitor import ResourceMonitor
-
-from core_v3.event_bus import EventBus
-from core_v3.events import (
-    UserInput,
-    SpeakRequest,
-    StreamComplete,
-    SystemEvent,
-    StateUpdated,
-    DecisionReady,
-    ToolRequest,
-    ToolResult,
-    ActionSuggestion,
-    PRIORITY_NORMAL,
-    PRIORITY_IMPORTANT,
+from cognition.agent_state import AgentState
+from cognition.decision_engine import (
+    PRIORITY_HIGH,
+    Decision,
+    DecisionEngine,
 )
+from cognition.goal_manager import GoalManager
+from cognition.llm_client import LLMClient, build_system_prompt
+from core.config import Config
 from core_v3.adapters import (
-    PerceptionAdapter,
     ActionAdapter,
-    VaultAdapter,
+    PerceptionAdapter,
     ResourceAdapter,
     SpeakingGuard,
+    VaultAdapter,
 )
+from core_v3.event_bus import EventBus
+from core_v3.events import (
+    ActionSuggestion,
+    DecisionReady,
+    StateUpdated,
+    StreamComplete,
+    SystemEvent,
+    ToolRequest,
+    ToolResult,
+    UserInput,
+)
+from infra.resource_monitor import ResourceMonitor
+from memory.vault_memory import VaultMemory
+from perception.hotword import HotwordDetector
+from perception.stt import STTEngine
+from perception.tts import TTSEngine
 
 log = logging.getLogger("jarvis.v3.brain")
 
@@ -159,8 +154,8 @@ class Brain:
         self._running = False
         self._stopped = False
         self._stop_event = asyncio.Event()
-        self._active_task: Optional[asyncio.Task] = None
-        self._internal_loop_task: Optional[asyncio.Task] = None
+        self._active_task: asyncio.Task | None = None
+        self._internal_loop_task: asyncio.Task | None = None
         # Shared with ActionAdapter (see SpeakingGuard docstring in
         # core_v2/adapters.py) so bus-mediated speech — resource alerts, goal
         # reminders — also suppresses STT, not just Brain-initiated speech.
@@ -194,7 +189,7 @@ class Brain:
             bus         = self._bus,
             vault       = self._vault_memory.vault,
         )
-        self._goal_manager_task: Optional[asyncio.Task] = None
+        self._goal_manager_task: asyncio.Task | None = None
 
         # ── Action ────────────────────────────────────────────────────────
         self._executor = AgentExecutor(
@@ -227,11 +222,11 @@ class Brain:
         self._bus.subscribe(ActionSuggestion, self._handle_action_suggestion)
 
         # Suggestion slot (used in Phase C when GoalManager fires)
-        self._pending_suggestion: Optional[ActionSuggestion] = None
+        self._pending_suggestion: ActionSuggestion | None = None
 
         # Confirmation slot — a future resolved by the next user utterance
         # (voice or text) when the executor asks to confirm a gated action.
-        self._pending_confirm: Optional[asyncio.Future] = None
+        self._pending_confirm: asyncio.Future | None = None
 
     # `_speaking` reads/writes the shared guard so every existing call site
     # (self._speaking = True/False, if self._speaking) keeps working unchanged
@@ -337,7 +332,7 @@ class Brain:
         finally:
             self._speaking = False
 
-    def _consume_pending_suggestion(self) -> Optional[ActionSuggestion]:
+    def _consume_pending_suggestion(self) -> ActionSuggestion | None:
         pending = self._pending_suggestion
         if pending is None:
             return None

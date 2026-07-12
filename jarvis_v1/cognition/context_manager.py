@@ -22,7 +22,6 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 from uuid import uuid4
 
 import aiosqlite
@@ -93,7 +92,7 @@ class ContextManager:
     def __init__(
         self,
         db_path: str = "data/conversations.db",
-        vec_path: Optional[str] = "data/chroma",
+        vec_path: str | None = "data/chroma",
         ollama_url: str = "http://localhost:11434",
         embed_model: str = "nomic-embed-text",
         compact_after: int = _COMPACT_AFTER,
@@ -107,10 +106,10 @@ class ContextManager:
 
         self._transcript = TranscriptStore()
         self._session_id: str = uuid4().hex
-        self._db: Optional[aiosqlite.Connection] = None
+        self._db: aiosqlite.Connection | None = None
 
         # Sprint B: semantic memory
-        self._memory: Optional[MemoryStore] = (
+        self._memory: MemoryStore | None = (
             MemoryStore(
                 vec_path=vec_path,
                 ollama_url=ollama_url,
@@ -214,7 +213,7 @@ class ContextManager:
         """
         Public shortcut for DecisionEngine to query semantic memory
         independently of build_messages().
- 
+
         Returns a list of memory strings, or empty list if memory
         is unavailable or the query returns nothing relevant.
         """
@@ -334,7 +333,7 @@ class ContextManager:
         ) as cursor:
             rows = await cursor.fetchall()
         return [{"role": r, "content": c} for r, c in rows]
-    
+
     async def recall_for_thinking(self, query: str, n: int = 3) -> list[str]:
         if self._memory and self._memory.ready:
             try:

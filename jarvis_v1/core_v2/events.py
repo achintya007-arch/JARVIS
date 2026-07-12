@@ -7,18 +7,18 @@ so V3 doesn't depend on V2). Re-exported here so existing
 """
 
 from core_common.events import (  # noqa: F401
-    UserInput,
-    StateUpdated,
+    PRIORITY_CRITICAL,
+    PRIORITY_IMPORTANT,
+    PRIORITY_NORMAL,
+    ActionSuggestion,
     DecisionReady,
+    ResourceAlert,
     SpeakRequest,
+    StateUpdated,
+    StreamComplete,
+    SystemEvent,
+    ThoughtGenerated,
     ToolRequest,
     ToolResult,
-    StreamComplete,
-    ThoughtGenerated,
-    ResourceAlert,
-    ActionSuggestion,
-    SystemEvent,
-    PRIORITY_NORMAL,
-    PRIORITY_IMPORTANT,
-    PRIORITY_CRITICAL,
+    UserInput,
 )

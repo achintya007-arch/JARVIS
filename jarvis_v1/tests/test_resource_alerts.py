@@ -13,15 +13,14 @@ Regression tests for the resource-alert bugs found during live testing:
    Fixed: a SpeakingGuard shared between Brain and ActionAdapter.
 """
 
-import asyncio
 
 import pytest
 
 pytest.importorskip("httpx")
 
 from core.config import ResourceConfig
-from infra.resource_monitor import ResourceMonitor
 from core_common.speaking import SpeakingGuard
+from infra.resource_monitor import ResourceMonitor
 
 
 class TestEdgeTriggeredPressure:
@@ -95,7 +94,7 @@ class TestSpeakingGuard:
         pytest.importorskip("sounddevice")
         from core_v2.adapters import ActionAdapter
         from core_v2.event_bus import EventBus
-        from core_v2.events import SpeakRequest, PRIORITY_CRITICAL
+        from core_v2.events import PRIORITY_CRITICAL, SpeakRequest
 
         class FakeTTS:
             def __init__(self):

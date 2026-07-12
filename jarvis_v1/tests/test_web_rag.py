@@ -7,9 +7,9 @@ import pytest
 
 pytest.importorskip("httpx")
 
-from core.config import WebRagConfig, VaultConfig
-from memory.web_rag import WebRAG
+from core.config import VaultConfig, WebRagConfig
 from memory.vault_memory import VaultMemory
+from memory.web_rag import WebRAG
 
 
 class TestWebRagDisabled:

@@ -12,8 +12,8 @@ import pytest
 pytest.importorskip("psutil")
 pytest.importorskip("httpx")
 
-from core.config import AgentConfig
 from action.agent_executor import AgentExecutor, ToolPermissionContext
+from core.config import AgentConfig
 
 
 def make_executor(**agent_kwargs):

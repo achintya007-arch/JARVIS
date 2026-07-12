@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date as _date, datetime
+from collections.abc import Iterator
+from datetime import date as _date
+from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Optional
 
 import yaml
 
@@ -87,7 +88,7 @@ class Vault:
         try:
             p.relative_to(self.root)
         except ValueError:
-            raise PermissionError(f"Path escapes the vault: {path}")
+            raise PermissionError(f"Path escapes the vault: {path}") from None
         return p
 
     # ── Read / write ──────────────────────────────────────────────────────────
@@ -113,11 +114,11 @@ class Vault:
 
     # ── Daily notes ───────────────────────────────────────────────────────────
 
-    def daily_path(self, when: Optional[_date] = None) -> Path:
+    def daily_path(self, when: _date | None = None) -> Path:
         when = when or _date.today()
         return self.daily_dir / f"{when.isoformat()}.md"
 
-    def ensure_daily(self, when: Optional[_date] = None) -> Path:
+    def ensure_daily(self, when: _date | None = None) -> Path:
         """Create today's daily note with frontmatter if it doesn't exist yet."""
         p = self.daily_path(when)
         if not p.exists():
@@ -130,7 +131,7 @@ class Vault:
         return p
 
     def append_exchange(self, user: str, assistant: str,
-                        when: Optional[datetime] = None) -> Path:
+                        when: datetime | None = None) -> Path:
         """Append one user↔JARVIS turn to today's daily note as a blockquote pair."""
         when = when or datetime.now()
         self.ensure_daily(when.date())
@@ -141,12 +142,12 @@ class Vault:
         )
         return self.append(self.daily_path(when.date()), block)
 
-    def read_today(self, when: Optional[_date] = None) -> str:
+    def read_today(self, when: _date | None = None) -> str:
         return self.read(self.daily_path(when))
 
     # ── Note authoring ────────────────────────────────────────────────────────
 
-    def create_note(self, title: str, body: str, tags: Optional[list[str]] = None) -> Path:
+    def create_note(self, title: str, body: str, tags: list[str] | None = None) -> Path:
         """Author a long-form memory note under memory/<slug>.md."""
         slug = slugify(title)
         meta = {

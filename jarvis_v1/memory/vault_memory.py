@@ -22,7 +22,6 @@ from __future__ import annotations
 import logging
 import re
 from collections import deque
-from typing import Deque, Optional
 
 from memory.vault import Vault
 from memory.vault_indexer import VaultIndexer
@@ -55,7 +54,7 @@ class VaultMemory:
         self._web_rag = WebRAG(web_rag_config, ollama_url) if web_rag_config else None
         # Rolling window of recent {role, content} messages (like V2 TranscriptStore).
         window = max(2, int(getattr(config, "rolling_window_turns", 30)))
-        self._recent: Deque[dict] = deque(maxlen=window)
+        self._recent: deque[dict] = deque(maxlen=window)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -89,7 +88,7 @@ class VaultMemory:
 
     # ── Core API (mirrors ContextManager) ─────────────────────────────────────
 
-    async def build_messages(self, user_text: str, intent: Optional[str] = None) -> list[dict]:
+    async def build_messages(self, user_text: str, intent: str | None = None) -> list[dict]:
         messages: list[dict] = []
 
         # Tier 2a — semantic recall over the user's vault (personal context)

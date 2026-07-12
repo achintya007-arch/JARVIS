@@ -13,7 +13,6 @@ instead of crashing.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import httpx
 
@@ -32,7 +31,7 @@ class OllamaEmbedder:
         self._url     = ollama_url.rstrip("/")
         self._model   = model
         self._timeout = timeout
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def start(self) -> None:
         if self._client is None:
@@ -47,7 +46,7 @@ class OllamaEmbedder:
         """Return True if the embed model responds (model pulled, Ollama up)."""
         return await self.embed("probe") is not None
 
-    async def embed(self, text: str) -> Optional[list[float]]:
+    async def embed(self, text: str) -> list[float] | None:
         if self._client is None:
             await self.start()
         try:

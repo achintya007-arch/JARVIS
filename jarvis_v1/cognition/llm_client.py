@@ -11,10 +11,11 @@ All existing methods (stream_with_message, stream, complete) are unchanged.
 """
 
 from __future__ import annotations
+
 import json
 import logging
 import re
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 

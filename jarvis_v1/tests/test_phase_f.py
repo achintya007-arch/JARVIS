@@ -9,7 +9,6 @@ import asyncio
 
 import pytest
 
-
 # ── Live context in the system prompt (CI-safe) ───────────────────────────────
 
 class TestSystemPromptScreenContext:

@@ -11,14 +11,15 @@ No real ResourceMonitor polling — pressure callbacks fired manually.
 
 import asyncio
 import sys
+
 sys.path.insert(0, ".")
 
-from core_v2.event_bus import EventBus
-from core_v2.events import ResourceAlert, SpeakRequest, PRIORITY_CRITICAL
-from core_v2.adapters import ResourceAdapter
-from core.config import Config
 from cognition.agent_state import AgentState
 from cognition.llm_client import LLMClient
+from core.config import Config
+from core_v2.adapters import ResourceAdapter
+from core_v2.event_bus import EventBus
+from core_v2.events import PRIORITY_CRITICAL, SpeakRequest
 
 PASS = "\033[32mPASS\033[0m"
 FAIL = "\033[31mFAIL\033[0m"

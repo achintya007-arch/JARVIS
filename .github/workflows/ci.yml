@@ -38,9 +38,6 @@ jobs:
                       PyYAML==6.0.3 psutil==7.2.2 httpx==0.28.1 aiosqlite==0.22.1
 
       - name: Lint (ruff)
-        # Non-blocking for now — surfaces issues without failing the build
-        # while the legacy V1/V2 code is cleaned up incrementally.
-        continue-on-error: true
         run: ruff check .
 
       - name: Run tests

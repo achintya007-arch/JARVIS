@@ -19,13 +19,12 @@ from __future__ import annotations
 import re
 import time
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Deque, Literal, Optional
+from dataclasses import dataclass
+from typing import Literal
 
 # Import Goal for the unified goal-management methods added below.
 # goal.py is standalone (no back-import), so no circular dependency.
 from cognition.goal import Goal
-
 
 # ── Type aliases ──────────────────────────────────────────────────────────────
 
@@ -86,7 +85,7 @@ _TOPIC_RE = re.compile(
 class StateSnapshot:
     user_state:           UserState
     system_state:         SystemState
-    current_focus:        Optional[str]
+    current_focus:        str | None
     last_interaction_age: float          # seconds since last user input
     recent_topics:        tuple[str, ...]
     conversation_intent:  Intent
@@ -110,9 +109,9 @@ class AgentState:
     def __init__(self, topic_history_len: int = 8):
         self._user_state:          UserState   = "neutral"
         self._system_state:        SystemState = "normal"
-        self._current_focus:       Optional[str] = None
+        self._current_focus:       str | None = None
         self._last_interaction_ts: float = time.time()
-        self._recent_topics:       Deque[str] = deque(maxlen=topic_history_len)
+        self._recent_topics:       deque[str] = deque(maxlen=topic_history_len)
         self._intent:              Intent = "unknown"
         self._interaction_count:   int = 0
 
@@ -207,7 +206,7 @@ class AgentState:
             "focused":    _FOCUSED_SIGNALS,
         }
 
-        detected: Optional[UserState] = None
+        detected: UserState | None = None
         for state, pattern in candidates.items():
             if pattern.search(text):
                 detected = state
@@ -244,7 +243,7 @@ class AgentState:
             return "chitchat"
         return "unknown"
 
-    def _infer_focus(self, text: str) -> Optional[str]:
+    def _infer_focus(self, text: str) -> str | None:
         """
         Detect if user is explicitly entering a focus mode.
         Returns the focus topic, or None.
@@ -259,7 +258,7 @@ class AgentState:
             return "deep work"
         return None
 
-    def _extract_topic(self, text: str) -> Optional[str]:
+    def _extract_topic(self, text: str) -> str | None:
         """
         Pull a short topic string from the input for recent_topics.
         Prefers noun phrases of 2-4 words. Falls back to longest single word.
@@ -295,7 +294,7 @@ class AgentState:
                 return
         self.active_goals.append(goal)
 
-    def get_goal(self, name: str) -> Optional[Goal]:
+    def get_goal(self, name: str) -> Goal | None:
         """Return the first active goal whose name matches (case-insensitive)."""
         name_lower = name.lower()
         for g in self.active_goals:
@@ -312,7 +311,7 @@ class AgentState:
         return any(g.is_active for g in self.active_goals)
 
     @property
-    def top_goal(self) -> Optional[Goal]:
+    def top_goal(self) -> Goal | None:
         """Highest-priority active goal, or None."""
         candidates = [g for g in self.active_goals if g.is_active]
         return max(candidates, key=lambda g: g.priority) if candidates else None

@@ -25,10 +25,9 @@ import hashlib
 import logging
 import time
 from pathlib import Path
-from typing import Optional
 
-import httpx
 import chromadb
+import httpx
 
 log = logging.getLogger("jarvis.memory")
 
@@ -60,8 +59,8 @@ class MemoryStore:
         self._vec_path    = vec_path
         self._ollama_url  = ollama_url.rstrip("/")
         self._embed_model = embed_model
-        self._client: Optional[httpx.AsyncClient] = None
-        self._chroma: Optional[chromadb.PersistentClient] = None
+        self._client: httpx.AsyncClient | None = None
+        self._chroma: chromadb.PersistentClient | None = None
         self._collection  = None
         self._ready       = False
 
@@ -166,7 +165,7 @@ class MemoryStore:
         distances = results.get("distances", [[]])[0]
         metas     = results.get("metadatas", [[]])[0]
 
-        for doc, dist, meta in zip(docs, distances, metas):
+        for doc, dist, meta in zip(docs, distances, metas, strict=False):
             if dist > _DISTANCE_THRESHOLD:
                 log.debug("Memory skipped (dist=%.3f > threshold)", dist)
                 continue
@@ -183,7 +182,7 @@ class MemoryStore:
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
-    async def _embed(self, text: str) -> Optional[list[float]]:
+    async def _embed(self, text: str) -> list[float] | None:
         """
         Call Ollama /api/embed and return the embedding vector.
         Returns None on any failure so callers can degrade gracefully.

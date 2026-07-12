@@ -14,26 +14,24 @@ should be relocated to a neutral module and both re-export from there.)
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from core_common.events import (  # noqa: F401  (re-exported)
-    UserInput,
-    StateUpdated,
+    PRIORITY_CRITICAL,
+    PRIORITY_IMPORTANT,
+    PRIORITY_NORMAL,
+    ActionSuggestion,
     DecisionReady,
+    ResourceAlert,
     SpeakRequest,
+    StateUpdated,
+    StreamComplete,
+    SystemEvent,
+    ThoughtGenerated,
     ToolRequest,
     ToolResult,
-    StreamComplete,
-    ThoughtGenerated,
-    ResourceAlert,
-    ActionSuggestion,
-    SystemEvent,
-    PRIORITY_NORMAL,
-    PRIORITY_IMPORTANT,
-    PRIORITY_CRITICAL,
+    UserInput,
 )
-
 
 # ── V3-only: vault events ─────────────────────────────────────────────────────
 

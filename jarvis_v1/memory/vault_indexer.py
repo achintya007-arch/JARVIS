@@ -20,10 +20,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Optional
 
-from memory.vault import Vault
 from memory.embeddings import OllamaEmbedder
+from memory.vault import Vault
 
 log = logging.getLogger("jarvis.vault.index")
 
@@ -66,7 +65,7 @@ class VaultIndexer:
         self._ready = False
         # path -> mtime of the last time we embedded it (this process)
         self._seen: dict[str, float] = {}
-        self._refresh_task: Optional[asyncio.Task] = None
+        self._refresh_task: asyncio.Task | None = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -188,7 +187,7 @@ class VaultIndexer:
         metas  = res.get("metadatas", [[]])[0]
 
         out: list[str] = []
-        for doc, dist, meta in zip(docs, dists, metas):
+        for doc, dist, meta in zip(docs, dists, metas, strict=False):
             if dist > _DISTANCE_MAX:
                 continue
             source = (meta or {}).get("source", "note")

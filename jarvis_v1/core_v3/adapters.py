@@ -16,33 +16,32 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
-from core_v3.event_bus import EventBus
-from core_v3.events import (
-    UserInput,
-    SpeakRequest,
-    StreamComplete,
-    ResourceAlert,
-    SystemEvent,
-    PRIORITY_NORMAL,
-    PRIORITY_IMPORTANT,
-    PRIORITY_CRITICAL,
-)
 # Shared guard so bus-mediated speech (resource alerts, goal reminders) also
 # suppresses STT input via the same object Brain uses — see its docstring.
 from core_common.speaking import SpeakingGuard
+from core_v3.event_bus import EventBus
+from core_v3.events import (
+    PRIORITY_CRITICAL,
+    PRIORITY_IMPORTANT,
+    ResourceAlert,
+    SpeakRequest,
+    StreamComplete,
+    SystemEvent,
+    UserInput,
+)
 
 if TYPE_CHECKING:
-    from core.config import Config
+    from action.agent_executor import AgentExecutor
     from cognition.agent_state import AgentState
     from cognition.llm_client import LLMClient
+    from core.config import Config
     from infra.resource_monitor import ResourceMonitor
+    from memory.vault_memory import VaultMemory
+    from perception.hotword import HotwordDetector
     from perception.stt import STTEngine
     from perception.tts import TTSEngine
-    from perception.hotword import HotwordDetector
-    from action.agent_executor import AgentExecutor
-    from memory.vault_memory import VaultMemory
 
 log = logging.getLogger("jarvis.v3.adapters")
 
@@ -64,10 +63,10 @@ class PerceptionAdapter:
 
     def __init__(
         self,
-        stt: "STTEngine",
-        hotword: "HotwordDetector",
+        stt: STTEngine,
+        hotword: HotwordDetector,
         bus: EventBus,
-        config: "Config",
+        config: Config,
         speaking_guard=None,
         interrupt_cb=None,
     ) -> None:
@@ -122,8 +121,10 @@ class PerceptionAdapter:
     # contains "jarvis", so speaker echo won't self-trigger it.
 
     async def _wake_loop(self) -> None:
-        import numpy as np
         from collections import deque
+
+        import numpy as np
+
         from perception.cues import play_chime
 
         keyword = getattr(self._hotword, "keyword", "jarvis")
@@ -214,10 +215,10 @@ class ActionAdapter:
 
     def __init__(
         self,
-        tts: "TTSEngine",
-        executor: "AgentExecutor",
+        tts: TTSEngine,
+        executor: AgentExecutor,
         bus: EventBus,
-        speaking_guard: "SpeakingGuard | None" = None,
+        speaking_guard: SpeakingGuard | None = None,
     ) -> None:
         self._tts      = tts
         self._executor = executor
@@ -275,7 +276,7 @@ class VaultAdapter:
     Phase B: VaultMemory is wired in; build_messages and add_exchange become real.
     """
 
-    def __init__(self, vault_memory: Optional["VaultMemory"], bus: EventBus) -> None:
+    def __init__(self, vault_memory: VaultMemory | None, bus: EventBus) -> None:
         self._vault = vault_memory
         self._bus   = bus
 
@@ -318,10 +319,10 @@ class ResourceAdapter:
 
     def __init__(
         self,
-        monitor: "ResourceMonitor",
-        agent_state: "AgentState",
-        llm: "LLMClient",
-        config: "Config",
+        monitor: ResourceMonitor,
+        agent_state: AgentState,
+        llm: LLMClient,
+        config: Config,
         bus: EventBus,
     ) -> None:
         self._monitor     = monitor

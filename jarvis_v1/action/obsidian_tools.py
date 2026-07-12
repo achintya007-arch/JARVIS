@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Optional
 
 log = logging.getLogger("jarvis.obsidian")
 
@@ -28,7 +27,7 @@ class ObsidianTools:
 
     # ── Authoring ─────────────────────────────────────────────────────────────
 
-    def create_note(self, title: str, body: str = "", tags: Optional[list] = None) -> str:
+    def create_note(self, title: str, body: str = "", tags: list | None = None) -> str:
         title = (title or "").strip()
         if not title:
             return "I need a title for the note, Sir."

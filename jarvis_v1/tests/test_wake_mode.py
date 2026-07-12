@@ -15,7 +15,7 @@ np = pytest.importorskip("numpy")
 
 from core.config import Config
 from core_common.event_bus import EventBus
-from core_common.events import UserInput, SystemEvent
+from core_common.events import UserInput
 from core_common.speaking import SpeakingGuard
 from core_v3.adapters import PerceptionAdapter
 
@@ -145,6 +145,7 @@ class TestSharedFeed:
         pytest.importorskip("sounddevice")
         pytest.importorskip("faster_whisper")
         import queue as stdlib_queue
+
         from perception.stt import STTEngine
 
         eng = STTEngine.__new__(STTEngine)          # skip model load
@@ -162,6 +163,7 @@ class TestSharedFeed:
         pytest.importorskip("sounddevice")
         pytest.importorskip("faster_whisper")
         import queue as stdlib_queue
+
         from perception.stt import STTEngine
 
         eng = STTEngine.__new__(STTEngine)

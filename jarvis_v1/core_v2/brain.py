@@ -32,50 +32,43 @@ import random
 import re
 import time
 from datetime import datetime
-from typing import Optional
 
-from core.config import Config
-from cognition.agent_state import AgentState
-from cognition.context_manager import ContextManager
-from cognition.goal_manager import GoalManager
-from cognition.decision_engine import (
-    DecisionEngine,
-    Decision,
-    PRIORITY_CRITICAL,
-    PRIORITY_HIGH,
-)
-from cognition.llm_client import LLMClient, build_system_prompt
-from cognition.agent_core import AgentCore
-from cognition.agent_core.planner import TOOL_SCHEMAS
 from action.agent_executor import AgentExecutor
 from action.fast_router import FastRouter
-from perception.stt import STTEngine
-from perception.tts import TTSEngine
-from perception.hotword import HotwordDetector
-from infra.resource_monitor import ResourceMonitor
-
-from core_v2.event_bus import EventBus
-from core_v2.events import (
-    UserInput,
-    SpeakRequest,
-    StreamComplete,
-    SystemEvent,
-    StateUpdated,
-    DecisionReady,
-    ToolRequest,
-    ToolResult,
-    ActionSuggestion,
-    PRIORITY_NORMAL,
-    PRIORITY_IMPORTANT,
-    PRIORITY_CRITICAL as EV_PRIORITY_CRITICAL,
+from cognition.agent_core import AgentCore
+from cognition.agent_core.planner import TOOL_SCHEMAS
+from cognition.agent_state import AgentState
+from cognition.context_manager import ContextManager
+from cognition.decision_engine import (
+    PRIORITY_HIGH,
+    Decision,
+    DecisionEngine,
 )
+from cognition.goal_manager import GoalManager
+from cognition.llm_client import LLMClient, build_system_prompt
+from core.config import Config
 from core_v2.adapters import (
-    PerceptionAdapter,
     ActionAdapter,
     MemoryAdapter,
+    PerceptionAdapter,
     ResourceAdapter,
     SpeakingGuard,
 )
+from core_v2.event_bus import EventBus
+from core_v2.events import (
+    ActionSuggestion,
+    DecisionReady,
+    StateUpdated,
+    StreamComplete,
+    SystemEvent,
+    ToolRequest,
+    ToolResult,
+    UserInput,
+)
+from infra.resource_monitor import ResourceMonitor
+from perception.hotword import HotwordDetector
+from perception.stt import STTEngine
+from perception.tts import TTSEngine
 
 log = logging.getLogger("jarvis.brain")
 
@@ -131,7 +124,7 @@ class Brain:
         self._bus     = EventBus()
         self._running = False
         self._stopped = False
-        self._internal_loop_task: Optional[asyncio.Task] = None
+        self._internal_loop_task: asyncio.Task | None = None
         self._last_proactive_time = 0
 
         # ── Infrastructure ────────────────────────────────────────────────
@@ -183,14 +176,14 @@ class Brain:
         self._bus.subscribe(ActionSuggestion, self._handle_action_suggestion)
 
         # Pending suggestion slot — single slot, ephemeral, auto-expires
-        self._pending_suggestion: Optional[ActionSuggestion] = None
+        self._pending_suggestion: ActionSuggestion | None = None
 
         # Confirmation slot — future resolved by the next user utterance (voice
         # or text) when the executor asks to confirm a gated action (audit C3).
-        self._pending_confirm: Optional[asyncio.Future] = None
+        self._pending_confirm: asyncio.Future | None = None
 
         self._stop_event = asyncio.Event()
-        self._active_task: Optional[asyncio.Task] = None
+        self._active_task: asyncio.Task | None = None
 
         # ── Goal management ───────────────────────────────────────────────────
         self._goal_manager = GoalManager(
@@ -198,7 +191,7 @@ class Brain:
             agent_state = self._agent_state,
             bus         = self._bus,
         )
-        self._goal_manager_task: Optional[asyncio.Task] = None
+        self._goal_manager_task: asyncio.Task | None = None
 
     # `_speaking` reads/writes the shared guard so every existing call site
     # (self._speaking = True/False, if self._speaking) keeps working unchanged
@@ -303,7 +296,7 @@ class Brain:
         finally:
             self._speaking = False
 
-    def _consume_pending_suggestion(self) -> Optional[ActionSuggestion]:
+    def _consume_pending_suggestion(self) -> ActionSuggestion | None:
         """Return pending suggestion if present and fresh, else clear and return None."""
         pending = self._pending_suggestion
         if pending is None:

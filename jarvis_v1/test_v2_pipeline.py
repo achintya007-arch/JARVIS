@@ -19,10 +19,10 @@ import time
 
 sys.path.insert(0, ".")
 
+from action.agent_executor import AgentExecutor
+from action.fast_router import FastRouter
 from cognition.agent_state import AgentState
 from cognition.decision_engine import DecisionEngine
-from action.fast_router import FastRouter
-from action.agent_executor import AgentExecutor
 from core.config import AgentConfig
 
 PASS = "\033[32mPASS\033[0m"

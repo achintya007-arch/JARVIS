@@ -19,7 +19,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import queue as stdlib_queue
-from typing import Optional
 
 import numpy as np
 import sounddevice as sd
@@ -80,7 +79,7 @@ class STTEngine:
 
         # Persistent mic stream — kept alive across all utterances.
         self._chunk_q: stdlib_queue.Queue[np.ndarray] = stdlib_queue.Queue()
-        self._stream: Optional[sd.InputStream] = None
+        self._stream: sd.InputStream | None = None
 
     async def initialize(self) -> None:
         """Open the mic stream once and keep it running."""
@@ -102,7 +101,7 @@ class STTEngine:
     # The wake-word detector consumes from THIS queue instead of opening its own
     # competing stream — one owner of the microphone, no contention.
 
-    def read_window(self, seconds: float, timeout: float = 1.0) -> Optional[np.ndarray]:
+    def read_window(self, seconds: float, timeout: float = 1.0) -> np.ndarray | None:
         """
         Block until ~`seconds` of audio has accumulated, then return it as one
         array. Used by the wake loop to classify rolling windows. Returns None

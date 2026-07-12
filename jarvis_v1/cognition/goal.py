@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Literal, Optional
-
+from typing import Literal
 
 # ── Types ─────────────────────────────────────────────────────────────────────
 

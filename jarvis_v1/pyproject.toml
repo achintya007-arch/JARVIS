@@ -68,10 +68,22 @@ include = ["core*", "core_v2*", "core_v3*", "cognition*", "action*", "perception
 [tool.ruff]
 line-length = 110
 target-version = "py310"
+# legacy/ is reference-only (V1); the root-level test_*.py are deprecated V2
+# ad-hoc scripts (the real suite is in tests/). Not worth linting.
+extend-exclude = ["legacy", "test_*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
-ignore = ["E501"]  # long lines are common in prompt/table literals
+ignore = [
+    "E501",  # long lines are common in prompt/table literals
+    "E701",  # compact `if cond: return x` is a deliberate style here
+    "E702",  # ditto for compact one-liners
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use pytest.importorskip() before imports, so module-level imports
+# legitimately follow code.
+"tests/*" = ["E402"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

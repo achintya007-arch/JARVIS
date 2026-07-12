@@ -1,13 +1,16 @@
 """
 test_goal_manager.py — GoalManager unit tests (offline, no TTS/STT/GPU).
 """
-import asyncio, sys, time
+import asyncio
+import sys
+import time
+
 sys.path.insert(0, ".")
 
 from cognition.agent_state import AgentState
 from cognition.goal_manager import GoalManager
 from core_v2.event_bus import EventBus
-from core_v2.events import SpeakRequest, UserInput, StreamComplete
+from core_v2.events import SpeakRequest
 
 PASS = "\033[32mPASS\033[0m"
 FAIL = "\033[31mFAIL\033[0m"
@@ -61,7 +64,6 @@ async def run():
     await gm.close()
 
     # 4 — load goals from DB on restart
-    import aiosqlite, json, uuid
     db_path = ":memory:"  # can't truly test restart with :memory: so we test _load manually
     gm, state, _ = await make_gm()
     await gm.create_goal("prepare thesis", 7, {})

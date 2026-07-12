@@ -1,4 +1,5 @@
 import asyncio
+
 from core_v2.event_bus import EventBus
 from core_v2.events import UserInput
 
@@ -20,7 +21,7 @@ async def main():
     bus.publish(UserInput(text="Hello Jarvis", source="test"))
 
     print("Event published (should NOT block)")
-    
+
     await asyncio.sleep(2)  # wait for handlers to complete
 
 asyncio.run(main())

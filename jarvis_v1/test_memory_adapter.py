@@ -1,7 +1,9 @@
 import asyncio
+
+from core_v2.adapters import MemoryAdapter
 from core_v2.event_bus import EventBus
 from core_v2.events import StreamComplete
-from core_v2.adapters import MemoryAdapter
+
 
 # Mock ContextManager
 class MockContext:

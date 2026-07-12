@@ -8,10 +8,10 @@ import pytest
 pytest.importorskip("psutil")
 pytest.importorskip("httpx")
 
-from core.config import AgentConfig, VaultConfig
+from action.agent_executor import AgentExecutor
 from action.fast_router import FastRouter
 from action.obsidian_tools import ObsidianTools
-from action.agent_executor import AgentExecutor
+from core.config import AgentConfig, VaultConfig
 from memory.vault_memory import VaultMemory
 
 

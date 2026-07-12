@@ -1,7 +1,9 @@
 import asyncio
-from core_v2.event_bus import EventBus
-from core_v2.events import SpeakRequest, PRIORITY_NORMAL, PRIORITY_CRITICAL
+
 from core_v2.adapters import ActionAdapter
+from core_v2.event_bus import EventBus
+from core_v2.events import PRIORITY_CRITICAL, PRIORITY_NORMAL, SpeakRequest
+
 
 # Mock TTS
 class MockTTS:

@@ -20,7 +20,7 @@ import asyncio
 import logging
 import re
 import time
-from typing import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 
 import numpy as np
 

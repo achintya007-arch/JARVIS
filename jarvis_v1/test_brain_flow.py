@@ -4,7 +4,6 @@ from core.config import Config
 from core_v2.brain import Brain
 from core_v2.events import UserInput
 
-
 # 🔥 Mock minimal config (reuse your real config if possible)
 config = Config()
 

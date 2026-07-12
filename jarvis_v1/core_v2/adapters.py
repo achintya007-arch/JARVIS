@@ -23,28 +23,29 @@ import time
 from typing import TYPE_CHECKING
 
 from core_common.event_bus import EventBus
-from core_common.speaking import SpeakingGuard  # noqa: F401  (re-exported for `from core_v2.adapters import SpeakingGuard`)
 from core_common.events import (
-    UserInput,
+    PRIORITY_CRITICAL,
+    PRIORITY_IMPORTANT,
+    ResourceAlert,
     SpeakRequest,
     StreamComplete,
-    ResourceAlert,
     SystemEvent,
-    PRIORITY_NORMAL,
-    PRIORITY_IMPORTANT,
-    PRIORITY_CRITICAL,
+    UserInput,
+)
+from core_common.speaking import (
+    SpeakingGuard,  # noqa: F401  (re-exported for `from core_v2.adapters import SpeakingGuard`)
 )
 
 if TYPE_CHECKING:
-    from core.config import Config
+    from action.agent_executor import AgentExecutor
     from cognition.agent_state import AgentState
+    from cognition.context_manager import ContextManager
     from cognition.llm_client import LLMClient
+    from core.config import Config
     from infra.resource_monitor import ResourceMonitor
+    from perception.hotword import HotwordDetector
     from perception.stt import STTEngine
     from perception.tts import TTSEngine
-    from perception.hotword import HotwordDetector
-    from cognition.context_manager import ContextManager
-    from action.agent_executor import AgentExecutor
 
 log = logging.getLogger("jarvis.adapters")
 
@@ -65,10 +66,10 @@ class PerceptionAdapter:
 
     def __init__(
         self,
-        stt: "STTEngine",
-        hotword: "HotwordDetector",
+        stt: STTEngine,
+        hotword: HotwordDetector,
         bus: EventBus,
-        config: "Config",
+        config: Config,
     ) -> None:
         self._stt     = stt
         self._hotword = hotword
@@ -155,10 +156,10 @@ class ActionAdapter:
 
     def __init__(
         self,
-        tts: "TTSEngine",
-        executor: "AgentExecutor",
+        tts: TTSEngine,
+        executor: AgentExecutor,
         bus: EventBus,
-        speaking_guard: "SpeakingGuard | None" = None,
+        speaking_guard: SpeakingGuard | None = None,
     ) -> None:
         self._tts      = tts
         self._executor = executor
@@ -224,7 +225,7 @@ class MemoryAdapter:
     (events can't return values, so these stay as direct calls).
     """
 
-    def __init__(self, context: "ContextManager", bus: EventBus) -> None:
+    def __init__(self, context: ContextManager, bus: EventBus) -> None:
         self._context = context
 
         bus.subscribe(StreamComplete, self._on_stream_complete)
@@ -265,10 +266,10 @@ class ResourceAdapter:
 
     def __init__(
         self,
-        monitor: "ResourceMonitor",
-        agent_state: "AgentState",
-        llm: "LLMClient",
-        config: "Config",
+        monitor: ResourceMonitor,
+        agent_state: AgentState,
+        llm: LLMClient,
+        config: Config,
         bus: EventBus,
     ) -> None:
         self._monitor     = monitor

@@ -14,8 +14,8 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-from core_v2.brain import Brain
 from core.config import Config
+from core_v2.brain import Brain
 
 logging.basicConfig(
     level=logging.INFO,

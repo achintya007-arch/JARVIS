@@ -8,12 +8,13 @@ Sprint D : SCREEN_TOOL_SCHEMAS added — screenshot, mouse, keyboard, windows, a
 """
 
 from __future__ import annotations
+
 import logging
 import re
 from typing import TYPE_CHECKING
 
 from .parser import extract_tool_calls
-from .schema import AgentResult, PermissionDenial, TurnState, UsageSummary
+from .schema import AgentResult, TurnState
 
 
 def _clean_for_tts(text: str) -> str:
@@ -654,8 +655,8 @@ def build_tool_schemas(screen_enabled: bool = True) -> list:
 class AgentCore:
     def __init__(
         self,
-        llm: "LLMClient",
-        executor: "AgentExecutor",
+        llm: LLMClient,
+        executor: AgentExecutor,
         max_turns: int = 5,
         stream_to_stdout: bool = True,
     ):

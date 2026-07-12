@@ -1,7 +1,9 @@
 # perception/vision.py
+import asyncio
+
 import cv2
 from ultralytics import YOLO
-import asyncio
+
 
 class VisionEngine:
     def __init__(self):

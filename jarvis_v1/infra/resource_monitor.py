@@ -3,9 +3,10 @@ Resource monitor — watches VRAM, RAM, CPU and triggers callbacks under pressur
 """
 
 from __future__ import annotations
+
 import asyncio
 import logging
-from typing import Callable, Awaitable, Optional
+from collections.abc import Awaitable, Callable
 
 import psutil
 
@@ -28,8 +29,8 @@ PressureCallback = Callable[[str, float, bool], Awaitable[None]]
 class ResourceMonitor:
     def __init__(self, config: ResourceConfig):
         self.config = config
-        self._task: Optional[asyncio.Task] = None
-        self._pressure_cb: Optional[PressureCallback] = None
+        self._task: asyncio.Task | None = None
+        self._pressure_cb: PressureCallback | None = None
         self._handle = None
         # Edge-trigger state per metric — without this, the callback fired on
         # EVERY poll tick (every poll_interval_sec) while a metric stayed above

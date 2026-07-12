@@ -9,15 +9,17 @@ Sprint D: ScreenTool wired in — screen capture, window management,
 """
 
 from __future__ import annotations
+
 import asyncio
 import logging
-import shlex
 import re
+import shlex
 import webbrowser
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import psutil
@@ -29,10 +31,10 @@ try:
 except Exception:
     _NVML_OK = False
 
-from core.config import AgentConfig
-from action.tools.web_tools import get_weather, web_search
 from action.tools.screen_tool import ScreenTool
+from action.tools.web_tools import get_weather, web_search
 from cognition.agent_core.schema import PermissionDenial
+from core.config import AgentConfig
 
 log = logging.getLogger("jarvis.agent")
 
@@ -82,7 +84,7 @@ class ToolPermissionContext:
             for p in self.deny_prefixes
         )
 
-    def check_shell_command(self, command: str) -> Optional[str]:
+    def check_shell_command(self, command: str) -> str | None:
         """
         Validate a shell command against the safety policy.
         Returns None if the command is permitted, or a human-readable denial
@@ -111,7 +113,7 @@ class ToolPermissionContext:
         return None
 
     @classmethod
-    def from_agent_config(cls, config: AgentConfig) -> "ToolPermissionContext":
+    def from_agent_config(cls, config: AgentConfig) -> ToolPermissionContext:
         denied: list[str] = []
         if not config.shell_enabled:
             denied.append("run_shell")
@@ -143,8 +145,8 @@ class AgentExecutor:
     def __init__(
         self,
         config: AgentConfig,
-        speak_callback: Optional[SpeakCallback] = None,
-        confirm_callback: Optional[ConfirmCallback] = None,
+        speak_callback: SpeakCallback | None = None,
+        confirm_callback: ConfirmCallback | None = None,
         vault_tools=None,
     ):
         self.config = config
@@ -202,12 +204,12 @@ class AgentExecutor:
             await asyncio.gather(*self._timer_tasks, return_exceptions=True)
         self._timer_tasks.clear()
 
-    async def execute(self, plan: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        results: List[Dict[str, Any]] = []
+    async def execute(self, plan: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
 
         for step in plan:
             tool: str = str(step.get("tool") or "")
-            args: Dict[str, Any] = step.get("args") or {}
+            args: dict[str, Any] = step.get("args") or {}
             log.info("Executing tool: %s | args: %s", tool, args)
 
             if self._permissions.blocks(tool):
@@ -240,7 +242,7 @@ class AgentExecutor:
 
     # ── Dispatch ──────────────────────────────────────────────────────────────
 
-    async def _dispatch(self, tool: str, args: Dict[str, Any]) -> Any:
+    async def _dispatch(self, tool: str, args: dict[str, Any]) -> Any:
 
         # ── Existing tools (unchanged) ─────────────────────────────────────
         if tool == "get_time":
@@ -440,7 +442,7 @@ class AgentExecutor:
         else:
             raise ValueError(f"Unknown tool: {tool}")
 
-    async def _dispatch_vault(self, tool: str, args: Dict[str, Any]) -> Any:
+    async def _dispatch_vault(self, tool: str, args: dict[str, Any]) -> Any:
         vt = self._vault_tools
         if tool == "create_note":
             return vt.create_note(
@@ -527,7 +529,7 @@ class AgentExecutor:
 
         return " | ".join(lines)
 
-    async def _run_shell(self, command: str) -> Dict[str, Any]:
+    async def _run_shell(self, command: str) -> dict[str, Any]:
         # SECURITY: validate against the allowlist + metacharacter policy, then
         # execute with shell=False and an explicit argv (no shell interpolation,
         # no chaining). Working directory is pinned to the sandbox via cwd=,
@@ -573,7 +575,7 @@ class AgentExecutor:
             f.write(content)
         return f"Written {len(content)} chars to {path}."
 
-    def _list_dir(self, path: str) -> List[str]:
+    def _list_dir(self, path: str) -> list[str]:
         p = Path(path)
         self._check_sandbox(p)
         return [str(x) for x in sorted(p.iterdir())][:100]
@@ -622,9 +624,10 @@ class AgentExecutor:
         if endpoint is not None:
             return endpoint
         # Legacy pycaw fallback
-        from pycaw.pycaw import IAudioEndpointVolume
-        from ctypes import cast, POINTER
+        from ctypes import POINTER, cast
+
         from comtypes import CLSCTX_ALL
+        from pycaw.pycaw import IAudioEndpointVolume
         interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
         return cast(interface, POINTER(IAudioEndpointVolume))
 
@@ -659,9 +662,9 @@ class AgentExecutor:
         except ValueError:
             raise PermissionError(
                 f"Path is outside the sandbox ({self._sandbox}). Access denied."
-            )
+            ) from None
 
-    def _requires_confirmation(self, tool: str, args: Dict[str, Any]) -> bool:
+    def _requires_confirmation(self, tool: str, args: dict[str, Any]) -> bool:
         if tool == "write_file":
             return True
         if tool in _SCREEN_CONFIRM_TOOLS:
@@ -672,7 +675,7 @@ class AgentExecutor:
             return True
         return False
 
-    async def _prompt_confirm(self, tool: str, args: Dict[str, Any]) -> bool:
+    async def _prompt_confirm(self, tool: str, args: dict[str, Any]) -> bool:
         """
         Ask the user to approve a gated action.
 

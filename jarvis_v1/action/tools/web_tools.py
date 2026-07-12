@@ -6,8 +6,8 @@ Sync calls were blocking the entire event loop during weather/search.
 """
 
 from __future__ import annotations
+
 import logging
-from typing import Optional
 
 import httpx
 
@@ -16,7 +16,7 @@ log = logging.getLogger("jarvis.web_tools")
 # Lazily created so the client binds to the running event loop on first use
 # rather than at import time (which caused "Event loop is closed" across loop
 # restarts and leaked the connection pool). Reused across calls thereafter.
-_CLIENT: Optional[httpx.AsyncClient] = None
+_CLIENT: httpx.AsyncClient | None = None
 
 
 def _client() -> httpx.AsyncClient:

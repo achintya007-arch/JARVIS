@@ -1,4 +1,5 @@
 import asyncio
+
 from core_v2.event_bus import EventBus
 from core_v2.events import SpeakRequest
 

@@ -18,7 +18,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import defaultdict
-from typing import Any, Awaitable, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 log = logging.getLogger("jarvis.event_bus")
 

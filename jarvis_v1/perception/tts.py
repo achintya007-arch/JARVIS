@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from typing import Optional
 
 import numpy as np
 import sounddevice as sd
@@ -66,7 +65,7 @@ class TTSEngine:
         self._pitch = getattr(config, "pitch", "+0Hz") if config else "+0Hz"
 
         self._queue:  asyncio.Queue = None   # type: ignore[assignment]
-        self._player: Optional[asyncio.Task] = None
+        self._player: asyncio.Task | None = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -145,7 +144,7 @@ class TTSEngine:
 
     # ── Synthesis (edge-tts + miniaudio) ──────────────────────────────────────
 
-    def _synthesize(self, text: str) -> Optional[tuple[int, np.ndarray]]:
+    def _synthesize(self, text: str) -> tuple[int, np.ndarray] | None:
         """
         Synthesize text via edge-tts, decode MP3 with miniaudio.
         Always called inside asyncio.to_thread() — safe to block here.
@@ -153,7 +152,6 @@ class TTSEngine:
         if not text.strip():
             return None
         try:
-            import edge_tts
             import miniaudio
 
             # edge-tts is async — run it in a fresh event loop in this thread
@@ -180,6 +178,7 @@ class TTSEngine:
         Fix #2: up to 3 attempts with exponential backoff (0.5s → 1s → 2s).
         """
         import asyncio as _asyncio
+
         import edge_tts
 
         last_exc: Exception = RuntimeError("No attempts made")

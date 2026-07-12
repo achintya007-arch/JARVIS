@@ -25,16 +25,14 @@ Each Decision tells the Assistant exactly what to do — no ambiguity.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import random
-import re
 import time
-from dataclasses import dataclass, field
-from typing import Any, Literal, Optional
+from dataclasses import dataclass
+from typing import Any, Literal
 
-from action.fast_router import FastRouter, RouteResult
-from cognition.agent_state import AgentState, StateSnapshot
+from action.fast_router import FastRouter
+from cognition.agent_state import StateSnapshot
 
 log = logging.getLogger("jarvis.decision")
 
@@ -224,7 +222,7 @@ class DecisionEngine:
 
     # ── Stage 2: Rule-based intelligence ────────────────────────────────────
 
-    def _rule_based(self, text: str, state: StateSnapshot) -> Optional[Decision]:
+    def _rule_based(self, text: str, state: StateSnapshot) -> Decision | None:
         """
         Handle events that don't need the LLM.
         System events, mood signals, simple intents.
