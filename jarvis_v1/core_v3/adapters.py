@@ -29,9 +29,9 @@ from core_v3.events import (
     PRIORITY_IMPORTANT,
     PRIORITY_CRITICAL,
 )
-# Shared with V2 so bus-mediated speech (resource alerts, goal reminders) also
-# suppresses STT input via the same guard object Brain uses — see its docstring.
-from core_v2.adapters import SpeakingGuard
+# Shared guard so bus-mediated speech (resource alerts, goal reminders) also
+# suppresses STT input via the same object Brain uses — see its docstring.
+from core_common.speaking import SpeakingGuard
 
 if TYPE_CHECKING:
     from core.config import Config

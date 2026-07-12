@@ -30,8 +30,8 @@ import aiosqlite
 from action.fast_router import FastRouter
 from cognition.goal import Goal
 from cognition.agent_state import AgentState
-from core_v2.event_bus import EventBus
-from core_v2.events import (
+from core_common.event_bus import EventBus
+from core_common.events import (
     SpeakRequest,
     ActionSuggestion,
     PRIORITY_IMPORTANT,

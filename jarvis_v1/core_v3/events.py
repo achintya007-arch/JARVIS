@@ -17,7 +17,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from core_v2.events import (  # noqa: F401  (re-exported)
+from core_common.events import (  # noqa: F401  (re-exported)
     UserInput,
     StateUpdated,
     DecisionReady,

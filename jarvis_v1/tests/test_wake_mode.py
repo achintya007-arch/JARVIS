@@ -14,9 +14,9 @@ import pytest
 np = pytest.importorskip("numpy")
 
 from core.config import Config
-from core_v2.event_bus import EventBus
-from core_v2.events import UserInput, SystemEvent
-from core_v2.adapters import SpeakingGuard
+from core_common.event_bus import EventBus
+from core_common.events import UserInput, SystemEvent
+from core_common.speaking import SpeakingGuard
 from core_v3.adapters import PerceptionAdapter
 
 

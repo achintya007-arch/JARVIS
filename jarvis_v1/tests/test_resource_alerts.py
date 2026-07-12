@@ -21,7 +21,7 @@ pytest.importorskip("httpx")
 
 from core.config import ResourceConfig
 from infra.resource_monitor import ResourceMonitor
-from core_v2.adapters import SpeakingGuard
+from core_common.speaking import SpeakingGuard
 
 
 class TestEdgeTriggeredPressure:

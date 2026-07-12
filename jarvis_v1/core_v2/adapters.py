@@ -22,8 +22,9 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from core_v2.event_bus import EventBus
-from core_v2.events import (
+from core_common.event_bus import EventBus
+from core_common.speaking import SpeakingGuard  # noqa: F401  (re-exported for `from core_v2.adapters import SpeakingGuard`)
+from core_common.events import (
     UserInput,
     SpeakRequest,
     StreamComplete,
@@ -50,23 +51,6 @@ log = logging.getLogger("jarvis.adapters")
 # When a CRITICAL SpeakRequest arrives, give TTS this long to finish its
 # current sentence before cutting over. Avoids jarring mid-word clips.
 _TTS_INTERRUPT_GRACE_SEC = 1.0
-
-
-class SpeakingGuard:
-    """
-    Shared mutable "is JARVIS currently talking" flag.
-
-    Brain's STT-suppression check and Brain-initiated speech (ack phrases, tool
-    responses, LLM streaming) both go through Brain's own self._speaking.
-    But SpeakRequest events published straight onto the bus at CRITICAL/
-    IMPORTANT priority (resource alerts, goal reminders) are spoken directly by
-    ActionAdapter, bypassing Brain entirely — so without a SHARED flag, STT
-    keeps listening while JARVIS talks over those, and can hear (and act on)
-    its own voice bleeding through the speakers. Brain and ActionAdapter both
-    hold a reference to the same instance so either can set/read it.
-    """
-    def __init__(self) -> None:
-        self.value: bool = False
 
 
 # ── PerceptionAdapter ─────────────────────────────────────────────────────────

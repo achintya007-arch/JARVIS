@@ -8,7 +8,7 @@ import pytest
 pytest.importorskip("aiosqlite")  # goal_manager imports it at module load
 
 from core.config import VaultConfig
-from core_v2.event_bus import EventBus
+from core_common.event_bus import EventBus
 from cognition.agent_state import AgentState
 from cognition.goal_manager import GoalManager
 from memory.vault import Vault
