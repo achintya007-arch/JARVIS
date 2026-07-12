@@ -1,0 +1,63 @@
+# Project-level ignores for jarvis_v1/.
+# The repo root is one level up (C:/CSE_Projects/JARVIS), so slash-anchored
+# patterns in the root .gitignore do NOT apply to this subdirectory. These do.
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Runtime data (SQLite history, Chroma vectors, vault index, web RAG index)
+data/
+!data/workspace/.gitkeep
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+
+# Conversation / memory DATA (not the memory/ source package)
+data/memory/
+data/vault_index/
+data/web_index/
+
+# Piper ONNX voice models — unused since the edge-tts switch (176 MB of blobs)
+voices/*.onnx
+voices/*.onnx.json
+voices/cache/
+
+# Screenshots / generated
+data/screenshots/
+screenshots/
+outputs/
+generated/
+
+# Local model weights
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+
+# Logs / caches
+*.log
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local tooling / editor state
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

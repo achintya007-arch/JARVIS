@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jarvis"
+version = "0.3.0"
+description = "JARVIS — a local, voice-driven AI assistant (Ollama LLM, faster-whisper STT, edge-tts TTS, Obsidian-vault memory)."
+requires-python = ">=3.10"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Achintya" }]
+
+# Pinned for reproducibility (this is an application, not a library).
+# Versions captured from the working environment on 2026-07-03.
+dependencies = [
+    "httpx==0.28.1",
+    "aiosqlite==0.22.1",
+    "chromadb==1.5.5",
+    "numpy==1.26.4",
+    "psutil==7.2.2",
+    "PyYAML==6.0.3",
+    # Speech I/O
+    "faster-whisper==1.2.1",
+    "edge-tts==7.2.8",
+    "miniaudio==1.61",
+    "sounddevice==0.5.5",
+    # Desktop control (Windows-targeted)
+    "PyAutoGUI==0.9.54",
+    "PyGetWindow==0.0.9",
+    "pyperclip==1.11.0",
+    "pycaw==20251023",
+    "comtypes==1.4.16",
+    "nvidia-ml-py3==7.352.0",
+]
+
+[project.optional-dependencies]
+# Vision (YOLO object detection) is heavy (pulls torch) and optional — the
+# assistant runs without it. Install with:  pip install -e ".[vision]"
+vision = [
+    "ultralytics==8.4.33",
+    "opencv-python==4.13.0.92",
+    "pillow==12.1.1",
+]
+# Offline FineWeb web-knowledge pipeline (Phase D). Only needed to BUILD the
+# index; the runtime queries the prebuilt Chroma index without `datasets`.
+data = [
+    "datasets>=2.19",
+]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.2",
+    "ruff==0.9.2",
+    "mypy==1.14.1",
+]
+
+[project.scripts]
+jarvis = "main:main"
+
+[tool.setuptools]
+py-modules = ["main"]
+
+[tool.setuptools.packages.find]
+include = ["core*", "core_v2*", "core_v3*", "cognition*", "action*", "perception*", "infra*", "memory*"]
+
+# ── Tooling ───────────────────────────────────────────────────────────────────
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]  # long lines are common in prompt/table literals
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true

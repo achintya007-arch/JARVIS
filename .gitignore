@@ -1,0 +1,97 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# Virtual Environments
+# =========================
+venv/
+.venv/
+env/
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Local LLM / AI Runtime
+# =========================
+
+# ChromaDB / vector memory
+data/chroma/
+chroma/
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+
+# Conversations / memory DATA (not the memory/ source package — scope to data/)
+data/conversations*
+data/memory/
+data/vault_index/
+data/web_index/
+
+# The user's Obsidian vault (personal notes + JARVIS's daily logs) — user data,
+# never committed. JARVIS recreates the structure on startup.
+/vault/
+
+# Screenshots / generated files
+screenshots/
+outputs/
+generated/
+
+# Local models / weights
+models/
+weights/
+checkpoints/
+
+# Common local model formats
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+
+# Voice / audio caches
+voices/cache/
+tts_cache/
+stt_cache/
+
+# Piper ONNX voice models — unused since the edge-tts switch (176 MB of blobs).
+# Keep them out of the repo; download on demand if Piper is ever reinstated.
+voices/*.onnx
+voices/*.onnx.json
+
+# =========================
+# Logs / Cache
+# =========================
+*.log
+.cache/
+.pytest_cache/
+.mypy_cache/
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Local tooling / editor state
+# =========================
+.claude/settings.local.json
+
+# =========================
+# Keep important docs
+# =========================
+!PROJECT_STRUCTURE.md
