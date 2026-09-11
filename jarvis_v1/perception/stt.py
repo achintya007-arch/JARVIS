@@ -193,7 +193,7 @@ class STTEngine:
         self._pre_chunks           = max(1, round(_c("pre_speech_sec", _DEF_PRE_SPEECH_SEC) / _CHUNK_SECS))
 
         # Transcription gates.
-        self._vad_filter      = _c("vad_filter", True)
+        self._vad_filter      = _c("vad_filter", False)
         self._no_speech_max   = _c("no_speech_max", _DEF_NO_SPEECH_MAX)
         self._avg_logprob_min = _c("avg_logprob_min", _DEF_AVG_LOGPROB_MIN)
         self._debug           = _c("debug_audio", False)

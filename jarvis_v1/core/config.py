@@ -39,7 +39,11 @@ class STTConfig:
     device: str = "cuda"
     compute_type: str = "int8"   # faster + lower VRAM
     language: str = "en"
-    vad_filter: bool = True
+    # Whisper's built-in VAD. OFF by default: our own adaptive VAD (below)
+    # already delivers clean, speech-bounded audio, and Whisper's VAD re-trims
+    # it — clipping soft trailing words ("the word before the full stop gets
+    # cut"). Leave off unless you feed un-gated audio straight to transcribe().
+    vad_filter: bool = False
 
     # ── Voice-activity capture (command recording) ──────────────────────────
     # These replaced hardcoded constants that made the mic "not listen

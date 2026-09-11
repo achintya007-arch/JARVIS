@@ -131,12 +131,23 @@ class PerceptionAdapter:
         log.info("Wake mode active — listening for %r", keyword)
         print(f'[JARVIS] Wake mode -- say "{keyword}" to talk (Ctrl+C to exit)\n', flush=True)
         window: deque = deque(maxlen=_WAKE_WINDOW_SEGS)
+        was_speaking = False
 
         while self._running:
             try:
                 # React faster while JARVIS is talking: shorter reads = a fresher,
                 # tighter window and ~3 checks/sec instead of 2.
                 speaking = self._speaking is not None and self._speaking.value
+
+                # When JARVIS has JUST finished speaking, the mic queue holds the
+                # reply's own audio (and any app it launched) that piled up during
+                # the turn. Drop it so wake detection resumes on LIVE input instead
+                # of chasing a stale backlog — otherwise it "only hears you once".
+                if was_speaking and not speaking:
+                    self._stt.flush()
+                    window.clear()
+                was_speaking = speaking
+
                 read_secs = _BARGE_READ_SECS if speaking else _WAKE_READ_SECS
 
                 seg = await asyncio.to_thread(self._stt.read_window, read_secs, 1.0)
@@ -155,6 +166,12 @@ class PerceptionAdapter:
                     if self._interrupt_cb is not None:
                         await self._interrupt_cb()
                 await self._on_wake(play_chime)
+
+                # Discard the backlog that accumulated during capture + the start
+                # of the reply, so the next iteration starts from live audio.
+                self._stt.flush()
+                window.clear()
+                was_speaking = self._speaking is not None and self._speaking.value
 
             except (KeyboardInterrupt, EOFError):
                 self._running = False
