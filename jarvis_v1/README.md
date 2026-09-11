@@ -7,7 +7,10 @@ the LLM is served by [Ollama](https://ollama.com), speech-to-text by
 by [edge-tts](https://github.com/rany2/edge-tts).
 
 > **Platform:** Windows-targeted (desktop-control tools use Windows APIs).
-> **Status:** V2 is stable; V3 (vault-centric memory) is in active development.
+> **Status:** V3 (vault-centric memory + wake-word voice) is the active default; V2 remains stable.
+>
+> This is the developer-focused reference. For the full overview, setup, and
+> documentation index, see the [root README](../README.md).
 
 ---
 
@@ -40,12 +43,12 @@ cognition, and action; thin adapters bridge each subsystem to the bus.
    Memory (SQLite + ChromaDB  ·  V3: Obsidian vault)
 ```
 
-Two orchestrators coexist during the V3 migration:
+Two orchestrators coexist; shared primitives live in `core_common/`:
 
-| Entry point       | Orchestrator      | State                     |
-|-------------------|-------------------|---------------------------|
-| `python main.py`  | `core_v2/brain.py`| Stable                    |
-| `python -m core_v3` | `core_v3/brain.py` | In development (vault memory) |
+| Entry point         | Orchestrator       | State                            |
+|---------------------|--------------------|----------------------------------|
+| `python -m core_v3` | `core_v3/brain.py` | **Active default** (vault memory) |
+| `python main.py`    | `core_v2/brain.py` | Stable (SQLite + ChromaDB)       |
 
 The original V1 (`legacy/assistant.py`) is retained for reference only.
 
@@ -70,7 +73,7 @@ See `action/agent_executor.py` and `tests/test_security.py`.
 - [Ollama](https://ollama.com) running locally, with models pulled:
   ```
   ollama pull qwen2.5:7b-instruct-q4_K_M      # main model
-  ollama pull phi3.5:3.8b-mini-instruct-q4_K_M # fallback under load
+  ollama pull qwen2.5:3b-instruct-q4_K_M       # lighter fallback under load
   ollama pull nomic-embed-text                 # memory embeddings
   ```
 - A CUDA GPU is recommended for faster-whisper (falls back to CPU).
@@ -83,8 +86,12 @@ pip install -r requirements.txt        # core dependencies (pinned)
 pip install -e ".[vision]"             # YOLO object detection (heavy)
 pip install -e ".[dev]"                # pytest, ruff, mypy
 
-python main.py                         # start V2 (voice mode by default)
+python -m core_v3                      # start V3 (vault brain, wake mode) — default
+python main.py                         # start V2 (stable brain)
 ```
+
+On Windows, prefer `.\run.ps1` (it runs preflight checks first): `.\run.ps1`
+(V3), `.\run.ps1 -Text` (keyboard), `.\run.ps1 -V2`, `.\run.ps1 -Test`.
 
 Configuration is read from `config.yaml` if present (see `core/config.py` for
 all options and defaults); otherwise built-in defaults are used.
