@@ -454,16 +454,27 @@ class Brain:
         state = self._agent_state.snapshot()
         self._bus.publish(StateUpdated(snapshot=state))
 
-        # 2. Build LLM messages — vault memory + (for factual queries) web knowledge
-        messages = await self._vault.build_messages(text, intent=state.conversation_intent)
-
-        # 3. Decision
+        # 2. Decision first. FastRouter (reflex) and the rule/ignore stages are
+        #    pure-text and never read `messages`, so running decide() before
+        #    building messages lets the common fast path ("what time is it",
+        #    timers, volume, gratitude, …) skip vault semantic recall entirely.
         decision = await self._decision_engine.decide(
             text     = text,
             state    = state,
             memories = [],
-            messages = messages,
+            messages = [],
         )
+
+        # 3. Build LLM messages only when we'll actually invoke the LLM. This is
+        #    the one place that pays for vault recall (an Ollama embedding
+        #    roundtrip + Chroma search) plus optional web-knowledge RAG; every
+        #    non-LLM decision now avoids that latency.
+        messages: list[dict] = []
+        if decision.action_type == "llm":
+            messages = await self._vault.build_messages(
+                text, intent=state.conversation_intent
+            )
+
         log.info(
             "Decision: type=%s priority=%d reason=%s",
             decision.action_type, decision.priority, decision.reason,
