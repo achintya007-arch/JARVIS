@@ -4,12 +4,14 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
 
 # =========================
 # Virtual Environments
 # =========================
 venv/
 .venv/
+venv_old/
 env/
 
 # =========================
