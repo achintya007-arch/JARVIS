@@ -1,9 +1,17 @@
 """
 TTSEngine — non-blocking, queue-based TTS with sentence-level streaming.
 
-Backend: edge-tts (Microsoft neural voices) + miniaudio for MP3 decode.
+Backends (selected by TTSConfig.engine):
+  - "piper" : local Piper neural TTS (offline, no network). Default.
+  - "edge"  : edge-tts (Microsoft cloud neural voices) + miniaudio MP3 decode.
 
-Architecture:
+Piper is preferred for latency: it synthesizes the first (usually short) streamed
+sentence in ~200–370 ms on CPU with NO network roundtrip, versus edge-tts's
+~530 ms first-audio plus network variance. If the Piper package or voice model
+is unavailable, the engine falls back to edge-tts automatically, so a fresh
+checkout with no model still speaks.
+
+Architecture (backend-agnostic):
   - Background _player_loop() drains an asyncio.Queue of (fs, audio) segments
   - enqueue(text)  → synthesize in thread, push to queue, return immediately
   - speak(text)    → enqueue all sentences, then drain (blocks until done)
@@ -15,11 +23,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
 
 log = logging.getLogger("jarvis.tts")
+
+# Local Piper voice models live in jarvis_v1/voices/<name>.onnx (+ .onnx.json).
+_VOICES_DIR = Path(__file__).resolve().parent.parent / "voices"
 
 # Default neural voice — Christopher is deep and professional
 _DEFAULT_VOICE = "en-US-ChristopherNeural"
@@ -45,25 +57,45 @@ def _split_sentences(text: str) -> list[str]:
     return [p.strip() for p in parts if p.strip() and len(p.strip()) > 1]
 
 
+def _rate_to_length_scale(rate: str) -> float:
+    """Map an edge-tts-style rate ('-4%', '+10%') to a Piper length_scale.
+    Piper length_scale >1 is slower, <1 faster. '-4%' (4% slower) → 1.04."""
+    try:
+        pct = float(rate.strip().rstrip("%"))
+    except (ValueError, AttributeError):
+        return 1.0
+    return round(1.0 - pct / 100.0, 3)
+
+
 class TTSEngine:
+    # edge-tts voice names for the Piper model names (used by the edge backend
+    # and as the fallback when a Piper model can't be loaded).
+    _VOICE_MAP = {
+        "en_US-ryan-high":     "en-US-ChristopherNeural",
+        "en_US-lessac-medium": "en-US-GuyNeural",
+    }
+
     def __init__(self, config=None):
         voice = getattr(config, "voice", None) if config else None
-        # Map old piper voice names to edge-tts voices
-        _VOICE_MAP = {
-            "en_US-ryan-high":    "en-US-ChristopherNeural",
-            "en_US-lessac-medium": "en-US-GuyNeural",
-        }
-        if voice and voice.startswith("en-"):       # already an edge-tts voice
+        self._engine = (getattr(config, "engine", "piper") if config else "piper").lower()
+
+        # Raw (Piper) model name, e.g. "en_US-ryan-high" — resolved to a .onnx
+        # under voices/ at initialize(). Kept even in edge mode for the map.
+        self._model_name = voice if (voice and not voice.startswith("en-")) else "en_US-ryan-high"
+
+        # edge-tts voice: either an explicit en-US-* name, a mapped model name,
+        # or the default. Also the fallback voice if Piper fails to load.
+        if voice and voice.startswith("en-"):
             self._voice = voice
-        elif voice in _VOICE_MAP:
-            self._voice = _VOICE_MAP[voice]
         else:
-            self._voice = _DEFAULT_VOICE
+            self._voice = self._VOICE_MAP.get(voice, _DEFAULT_VOICE)
 
         # Prosody — composed cadence (see TTSConfig).
         self._rate  = getattr(config, "rate", "+0%") if config else "+0%"
         self._pitch = getattr(config, "pitch", "+0Hz") if config else "+0Hz"
+        self._length_scale = _rate_to_length_scale(self._rate)
 
+        self._piper = None                   # loaded PiperVoice (piper engine only)
         self._queue:  asyncio.Queue = None   # type: ignore[assignment]
         self._player: asyncio.Task | None = None
 
@@ -72,7 +104,35 @@ class TTSEngine:
     async def initialize(self) -> None:
         self._queue  = asyncio.Queue()
         self._player = asyncio.create_task(self._player_loop())
-        log.info("TTS ready | voice=%s (edge-tts neural)", self._voice)
+
+        if self._engine == "piper":
+            self._piper = await asyncio.to_thread(self._load_piper)
+            if self._piper is not None:
+                log.info(
+                    "TTS ready | engine=piper voice=%s (local, offline) length_scale=%.2f",
+                    self._model_name, self._length_scale,
+                )
+                return
+            # Load failed — degrade to edge-tts so the assistant still speaks.
+            self._engine = "edge"
+            log.warning("Piper unavailable — falling back to edge-tts (voice=%s)", self._voice)
+
+        log.info("TTS ready | engine=edge voice=%s (edge-tts neural)", self._voice)
+
+    def _load_piper(self):
+        """Load the Piper voice model from voices/<name>.onnx. Returns the
+        PiperVoice, or None if the package or model file is missing (caller
+        then falls back to edge-tts)."""
+        model = _VOICES_DIR / f"{self._model_name}.onnx"
+        if not model.exists():
+            log.warning("Piper model not found: %s", model)
+            return None
+        try:
+            from piper import PiperVoice
+            return PiperVoice.load(str(model))
+        except Exception as e:
+            log.warning("Piper load failed (%s): %s", self._model_name, e)
+            return None
 
     async def shutdown(self) -> None:
         if self._queue:
@@ -142,15 +202,41 @@ class TTSEngine:
                 log.warning("TTS playback timed out (10s) — skipping segment and continuing")
                 sd.stop()
 
-    # ── Synthesis (edge-tts + miniaudio) ──────────────────────────────────────
+    # ── Synthesis ──────────────────────────────────────────────────────────────
 
     def _synthesize(self, text: str) -> tuple[int, np.ndarray] | None:
+        """Dispatch to the active backend. Always called inside
+        asyncio.to_thread() — safe to block here."""
+        if not text.strip():
+            return None
+        if self._piper is not None:
+            return self._synthesize_piper(text)
+        return self._synthesize_edge(text)
+
+    def _synthesize_piper(self, text: str) -> tuple[int, np.ndarray] | None:
+        """Local Piper synthesis → (sample_rate, float32 mono samples)."""
+        try:
+            from piper import SynthesisConfig
+
+            syn = SynthesisConfig(length_scale=self._length_scale)
+            chunks = [
+                chunk.audio_int16_array
+                for chunk in self._piper.synthesize(text, syn_config=syn)
+            ]
+            if not chunks:
+                return None
+            pcm = np.concatenate(chunks)
+            audio = pcm.astype(np.float32) / 32768.0
+            return self._piper.config.sample_rate, audio
+        except Exception as e:
+            log.error("Piper synthesis error: %s", e)
+            return None
+
+    def _synthesize_edge(self, text: str) -> tuple[int, np.ndarray] | None:
         """
         Synthesize text via edge-tts, decode MP3 with miniaudio.
         Always called inside asyncio.to_thread() — safe to block here.
         """
-        if not text.strip():
-            return None
         try:
             import miniaudio
 

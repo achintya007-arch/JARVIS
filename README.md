@@ -4,8 +4,10 @@ Speech in → local LLM reasoning → tool execution / desktop control → speec
 **Everything runs on your own machine.** No cloud API, no data leaving the box:
 the LLM is served by [Ollama](https://ollama.com), speech-to-text by
 [faster-whisper](https://github.com/SYSTRAN/faster-whisper), text-to-speech by
-[edge-tts](https://github.com/rany2/edge-tts), and long-term memory lives in a
-local [Obsidian](https://obsidian.md) vault + an on-disk vector index.
+local [Piper](https://github.com/OHF-Voice/piper1-gpl) (with
+[edge-tts](https://github.com/rany2/edge-tts) as a cloud fallback), and
+long-term memory lives in a local [Obsidian](https://obsidian.md) vault + an
+on-disk vector index.
 
 > **Platform:** Windows-targeted (desktop-control tools use Windows APIs; the
 > core conversation loop is cross-platform).
@@ -86,9 +88,27 @@ cd jarvis_v1
 pip install -r requirements.txt     # pinned core dependencies
 
 # optional feature sets:
+pip install -e ".[piper]"           # local offline TTS (recommended — see below)
 pip install -e ".[vision]"          # YOLO object detection (heavy — pulls torch)
 pip install -e ".[dev]"             # pytest, ruff, mypy
 ```
+
+### Text-to-speech: local Piper (default) vs. cloud edge-tts
+
+By default (`tts.engine: "piper"`) JARVIS speaks with a **local Piper** voice —
+lower first-audio latency than cloud TTS and no network dependency. It needs the
+`[piper]` extra above plus a voice model placed in `jarvis_v1/voices/`:
+
+```bash
+# download a voice (.onnx + .onnx.json) into voices/ — e.g. from
+# https://huggingface.co/rhasspy/piper-voices  (en_US-lessac-medium is a good,
+# low-latency default; en_US-ryan-high sounds richer but is slower per sentence)
+```
+
+Set the model name via `tts.voice` (e.g. `en_US-lessac-medium`). **If the Piper
+package or the model file is missing, JARVIS automatically falls back to
+edge-tts** — so it still speaks out of the box with no extra setup. To force the
+cloud backend, set `tts.engine: "edge"`.
 
 ### Launch (Windows, recommended)
 
@@ -133,7 +153,9 @@ stt:
   compute_type: "int8"
 
 tts:
-  rate: "-4%"           # edge-tts prosody; slightly slower reads as composed
+  engine: "piper"       # "piper" (local, default) or "edge" (cloud fallback)
+  voice: "en_US-ryan-high"   # Piper model name in voices/ (or an en-US-* edge voice)
+  rate: "-4%"           # prosody; slightly slower reads as composed
 
 agent:
   shell_enabled: false  # OFF by default — see Security
@@ -221,8 +243,8 @@ A deeper module-by-module map is in
 - **Windows-only** for desktop-control tools (volume, window focus, screen capture).
 - `web_search` uses DuckDuckGo's Instant Answer API — results are limited to the
   set of queries that API answers.
-- TTS (edge-tts) requires a network connection; it is the one component that is
-  not fully local. A local-TTS swap is on the roadmap.
+- The default TTS (Piper) is fully local. The edge-tts fallback requires a
+  network connection; it is used only when no local Piper voice is available.
 
 ## Documentation
 

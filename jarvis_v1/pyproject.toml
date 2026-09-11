@@ -47,6 +47,12 @@ vision = [
 data = [
     "datasets>=2.19",
 ]
+# Local offline TTS (Piper). Lower first-audio latency than cloud edge-tts and
+# no network dependency; needs a voice model under voices/ (see README). When
+# the package or model is absent, TTSEngine falls back to edge-tts automatically.
+piper = [
+    "piper-tts==1.8.0",
+]
 dev = [
     "pytest==8.3.4",
     "pytest-asyncio==0.25.2",
