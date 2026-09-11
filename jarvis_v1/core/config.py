@@ -41,6 +41,33 @@ class STTConfig:
     language: str = "en"
     vad_filter: bool = True
 
+    # ── Voice-activity capture (command recording) ──────────────────────────
+    # These replaced hardcoded constants that made the mic "not listen
+    # completely" (cut off on pauses) or "not properly" (missed quiet speech).
+    #
+    # adaptive_threshold: calibrate the silence threshold from the room's noise
+    #   floor at the start of each capture, instead of a fixed RMS that only
+    #   works for one mic/environment. silence_threshold is the FLOOR it can't
+    #   go below (and the value used when adaptive is off).
+    adaptive_threshold: bool = True
+    silence_threshold: float = 0.010     # base RMS floor
+    onset_multiplier: float = 2.2        # speech starts at noise_floor * this
+    end_silence_sec: float = 1.3         # trailing silence that ends a turn (was 0.8)
+    max_utterance_sec: float = 15.0      # hard cap per turn (was 8)
+    onset_timeout_sec: float = 7.0       # give up if no speech starts after wake
+    min_speech_sec: float = 0.3          # ignore blips shorter than this
+    pre_speech_sec: float = 0.8          # look-back kept before speech onset
+
+    # ── Transcription confidence gates ──────────────────────────────────────
+    # Whisper invents text on silence; these drop low-confidence segments. The
+    # previous fixed values dropped real (quiet/accented) speech too.
+    no_speech_max: float = 0.6
+    avg_logprob_min: float = -1.1
+
+    # Print per-capture diagnostics (calibrated threshold, onset, stop reason,
+    # dropped-segment reasons). Turn on when tuning the mic.
+    debug_audio: bool = False
+
 
 # =========================
 # TEXT TO SPEECH

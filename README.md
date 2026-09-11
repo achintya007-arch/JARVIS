@@ -166,6 +166,23 @@ agent:
 mode: "wake"            # wake | text | voice
 ```
 
+### Voice input (STT) tuning
+
+Speech capture adapts its silence threshold to your mic and room, but if it cuts
+you off, misses quiet speech, or mishears, run the diagnostic to see exactly
+what it hears and calibrate:
+
+```powershell
+.\run.ps1 -MicCheck        # or:  python -m tools.mic_check
+```
+
+It prints your ambient noise floor, the adaptive onset threshold, and — for each
+test utterance — the stop reason, duration, and Whisper confidence. Then adjust
+`STTConfig` in [`core/config.py`](jarvis_v1/core/config.py) (or `config.yaml`):
+`end_silence_sec` (raise if it truncates mid-sentence), `silence_threshold`
+(lower if quiet speech is missed), `avg_logprob_min` (lower if real speech is
+dropped), or set `debug_audio: true` to see the same diagnostics during normal use.
+
 ### Optional: local web-knowledge index (V3)
 
 For grounded answers to factual questions, build a one-time RAG corpus from

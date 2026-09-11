@@ -8,13 +8,15 @@
     .\run.ps1 -V2             # V2 (stable brain)
     .\run.ps1 -Test           # run the test suite instead of launching
     .\run.ps1 -VoiceTest      # A/B test TTS voice/rate/pitch (see tools/voice_test.py)
+    .\run.ps1 -MicCheck       # diagnose mic / STT capture (see tools/mic_check.py)
 #>
 [CmdletBinding()]
 param(
     [switch]$V2,        # run the stable V2 brain (python main.py) instead of V3
     [switch]$Text,      # keyboard input instead of voice
     [switch]$Test,      # run pytest and exit
-    [switch]$VoiceTest  # run tools/voice_test.py and exit
+    [switch]$VoiceTest, # run tools/voice_test.py and exit
+    [switch]$MicCheck   # run tools/mic_check.py and exit
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,6 +36,12 @@ if ($Test) {
 if ($VoiceTest) {
     Info "Launching voice A/B tester (see tools/voice_test.py --help for options)..."
     python -m tools.voice_test
+    exit $LASTEXITCODE
+}
+
+if ($MicCheck) {
+    Info "Launching mic / STT diagnostic (see tools/mic_check.py)..."
+    python -m tools.mic_check
     exit $LASTEXITCODE
 }
 

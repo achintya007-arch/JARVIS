@@ -35,7 +35,11 @@ _JARVIS_RE = re.compile(r"\b(?:j[ae]rv\w*|charvis|garvis|harvis|travis|jarvez)\b
 # ── Tuning ─────────────────────────────────────────────────────────────────────
 _SAMPLE_RATE    = 16_000
 _WINDOW_SECS    = 1.5          # seconds per recognition window
-_SILENCE_RMS    = 0.010        # skip transcription below this RMS amplitude
+# Cheap pre-gate: skip tiny.en when the window is below this RMS. Kept low
+# (0.006) so a quietly-spoken "Jarvis" still reaches the detector — the fuzzy
+# keyword match, not this gate, decides whether it was the wake word. The only
+# cost of a lower gate is tiny.en running on a few more near-silent windows.
+_SILENCE_RMS    = 0.006
 _POST_WAKE_SLEEP = 0.3         # brief pause after callback before resuming
 
 
