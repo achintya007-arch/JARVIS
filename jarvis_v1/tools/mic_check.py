@@ -31,9 +31,11 @@ async def main() -> None:
     base = stt.silence_threshold
     mult = stt._onset_mult
     print("\n=== Mic check ===")
-    print(f"config: adaptive={stt._adaptive} base_threshold={base:.4f} "
-          f"onset_multiplier={mult} end_silence={stt._end_silence_chunks * _CHUNK_SECS:.1f}s "
+    vad = "silero (neural)" if stt._silero is not None else "rms (energy)"
+    print(f"config: vad_backend={vad} end_silence={stt._end_silence_chunks * _CHUNK_SECS:.1f}s "
           f"max={stt._max_chunks * _CHUNK_SECS:.0f}s")
+    print(f"        rms-fallback: adaptive={stt._adaptive} base_threshold={base:.4f} "
+          f"onset_multiplier={mult}")
 
     # 1) Ambient floor
     print("\n[1] Measuring ambient noise for ~2s — please stay quiet...")
@@ -41,14 +43,18 @@ async def main() -> None:
     stt.flush()
     win = await asyncio.to_thread(stt.read_window, 2.0, 1.5)
     floor = _rms(win) if win is not None else 0.0
-    lo, hi = base, round(base * mult, 4)
     print(f"    ambient RMS floor ≈ {floor:.4f}")
-    print(f"    → adaptive onset will sit in [{lo:.4f}, {hi:.4f}]")
-    if floor > hi:
-        print("    ⚠ ambient floor is ABOVE the max onset threshold — the room is "
-              "noisy for this mic. Raise stt.silence_threshold or move the mic closer.")
-    elif floor > base:
-        print("    note: ambient is above base; onset will adapt upward (good).")
+    if stt._silero is not None:
+        print("    (Silero neural VAD is active — it detects speech directly, so "
+              "this RMS floor is informational only.)")
+    else:
+        lo, hi = base, round(base * mult, 4)
+        print(f"    → adaptive onset will sit in [{lo:.4f}, {hi:.4f}]")
+        if floor > hi:
+            print("    ⚠ ambient floor is ABOVE the max onset threshold — the room is "
+                  "noisy for this mic. Raise stt.silence_threshold or move the mic closer.")
+        elif floor > base:
+            print("    note: ambient is above base; onset will adapt upward (good).")
 
     # 2) Capture rounds
     print("\n[2] Capture test. Press Enter, then speak a full command "

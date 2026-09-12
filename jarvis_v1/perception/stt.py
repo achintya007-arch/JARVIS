@@ -96,14 +96,19 @@ def _vad_collect(
     pre_chunks: int,
     onset_timeout_chunks: int,
     min_speech_chunks: int,
+    score_fn: Callable[[np.ndarray], float] | None = None,
 ) -> tuple[np.ndarray | None, dict]:
     """
     Pure VAD state machine — no mic, no model, fully unit-testable.
 
     `next_chunk()` returns the next mono float32 chunk, or None on stream
-    stall/end. Returns (audio | None, info) where info carries the calibrated
-    threshold, onset amplitude, chunk count, and the stop `reason`
-    ("end_silence" | "max_duration" | "onset_timeout" | "stream_end" | "too_short").
+    stall/end. `score_fn`, when given, maps a chunk to a speech score (e.g. a
+    neural VAD's speech probability) and a FIXED `base_threshold` is used; when
+    None, chunk RMS energy is scored with the adaptive-threshold calibration.
+
+    Returns (audio | None, info) where info carries the threshold, onset score,
+    chunk count, and the stop `reason` ("end_silence" | "max_duration" |
+    "onset_timeout" | "stream_end" | "too_short").
     """
     pre_buffer: deque[np.ndarray] = deque(maxlen=max(1, pre_chunks))
     collected: list[np.ndarray] = []
@@ -122,14 +127,18 @@ def _vad_collect(
             reason = "stream_end" if started else "onset_timeout"
             break
         total += 1
-        amp = _rms(chunk)
+        amp = score_fn(chunk) if score_fn is not None else _rms(chunk)
 
         if not started:
-            # Calibrate: track the quietest pre-speech chunk (bounded to base),
-            # then trigger at floor * multiplier — but never below base.
-            quietest = min(quietest, amp)
-            floor = min(quietest, base_threshold)
-            onset_threshold = max(base_threshold, floor * onset_multiplier) if adaptive else base_threshold
+            if score_fn is not None:
+                # Neural VAD: fixed probability threshold, no energy calibration.
+                onset_threshold = base_threshold
+            else:
+                # Calibrate: track the quietest pre-speech chunk (bounded to base),
+                # then trigger at floor * multiplier — but never below base.
+                quietest = min(quietest, amp)
+                floor = min(quietest, base_threshold)
+                onset_threshold = max(base_threshold, floor * onset_multiplier) if adaptive else base_threshold
 
             pre_buffer.append(chunk)
             onset_wait += 1
@@ -171,6 +180,40 @@ def _vad_collect(
     return np.concatenate(collected), info
 
 
+class _SileroVad:
+    """Neural VAD wrapper — maps 100ms mic chunks to a speech probability.
+
+    Silero requires exactly 512-sample frames at 16kHz, so we buffer across
+    chunks and score each chunk by the MAX probability over its frames (so a
+    speech onset anywhere in the 100ms is caught). Uses the onnxruntime backend
+    (already present for Piper); torch is only needed to wrap input frames.
+    """
+
+    FRAME = 512
+
+    def __init__(self) -> None:
+        import torch  # noqa: F401 (input frames must be tensors)
+        from silero_vad import load_silero_vad
+
+        self._torch = torch
+        self._model = load_silero_vad(onnx=True)
+        self._buf = np.empty(0, dtype=np.float32)
+
+    def reset(self) -> None:
+        self._model.reset_states()
+        self._buf = np.empty(0, dtype=np.float32)
+
+    def prob(self, chunk: np.ndarray) -> float:
+        self._buf = np.concatenate([self._buf, chunk.astype(np.float32)])
+        best = 0.0
+        while len(self._buf) >= self.FRAME:
+            frame = self._buf[: self.FRAME]
+            self._buf = self._buf[self.FRAME:]
+            p = float(self._model(self._torch.from_numpy(frame), _SAMPLE_RATE))
+            best = max(best, p)
+        return best
+
+
 class STTEngine:
     def __init__(self, config=None):
         self.fs = _SAMPLE_RATE
@@ -181,6 +224,19 @@ class STTEngine:
         model_size   = _c("model",        "base.en")
         device       = _c("device",       "cuda")
         compute_type = _c("compute_type", "int8")
+
+        # VAD backend. Silero is preferred (robust, no per-mic tuning); falls
+        # back to the adaptive RMS state machine if the package isn't installed.
+        self._vad_backend     = _c("vad_backend", "silero")
+        self._silero_threshold = _c("silero_threshold", 0.5)
+        self._silero: _SileroVad | None = None
+        if self._vad_backend == "silero":
+            try:
+                self._silero = _SileroVad()
+                log.info("VAD backend: silero (neural)")
+            except Exception as e:
+                self._vad_backend = "rms"
+                log.warning("Silero VAD unavailable (%s) — falling back to RMS VAD", e)
 
         # Capture tunables (see STTConfig).
         self.silence_threshold = _c("silence_threshold", _DEF_SILENCE_THRESHOLD)
@@ -216,10 +272,9 @@ class STTEngine:
         )
         self._stream.start()
         log.info(
-            "STT mic stream open (persistent) | adaptive=%s base_thresh=%.3f "
-            "end_silence=%.1fs max=%.0fs",
-            self._adaptive, self.silence_threshold,
-            self._end_silence_chunks * _CHUNK_SECS, self._max_chunks * _CHUNK_SECS,
+            "STT mic stream open (persistent) | vad=%s end_silence=%.1fs max=%.0fs",
+            self._vad_backend, self._end_silence_chunks * _CHUNK_SECS,
+            self._max_chunks * _CHUNK_SECS,
         )
 
     async def shutdown(self) -> None:
@@ -298,9 +353,19 @@ class STTEngine:
             except stdlib_queue.Empty:
                 return None
 
+        # Silero backend: a fixed speech-probability threshold, no energy
+        # calibration. RMS backend: adaptive energy threshold.
+        if self._silero is not None:
+            self._silero.reset()
+            score_fn = self._silero.prob
+            base = self._silero_threshold
+        else:
+            score_fn = None
+            base = self.silence_threshold
+
         audio, info = _vad_collect(
             _next,
-            base_threshold       = self.silence_threshold,
+            base_threshold       = base,
             onset_multiplier     = self._onset_mult,
             adaptive             = self._adaptive,
             end_silence_chunks   = self._end_silence_chunks,
@@ -308,6 +373,7 @@ class STTEngine:
             pre_chunks           = self._pre_chunks,
             onset_timeout_chunks = self._onset_timeout_chunks,
             min_speech_chunks    = self._min_speech_chunks,
+            score_fn             = score_fn,
         )
 
         if self._debug:

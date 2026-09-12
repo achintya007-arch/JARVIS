@@ -45,7 +45,16 @@ class STTConfig:
     # cut"). Leave off unless you feed un-gated audio straight to transcribe().
     vad_filter: bool = False
 
+    # ── Voice-activity detection backend ────────────────────────────────────
+    # "silero": neural VAD (Silero, via onnxruntime) — robust speech/non-speech
+    #   detection that needs no per-mic threshold tuning. Requires the [vad]
+    #   extra (pulls torch); falls back to "rms" if unavailable.
+    # "rms":    the adaptive energy-based VAD below (no extra dependency).
+    vad_backend: str = "silero"
+    silero_threshold: float = 0.5        # speech probability to count as speech
+
     # ── Voice-activity capture (command recording) ──────────────────────────
+    # The RMS backend's tunables (also the fallback when Silero is unavailable).
     # These replaced hardcoded constants that made the mic "not listen
     # completely" (cut off on pauses) or "not properly" (missed quiet speech).
     #

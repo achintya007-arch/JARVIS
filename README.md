@@ -89,6 +89,7 @@ pip install -r requirements.txt     # pinned core dependencies
 
 # optional feature sets:
 pip install -e ".[piper]"           # local offline TTS (recommended — see below)
+pip install -e ".[vad]"             # neural voice-activity detection (Silero; recommended)
 pip install -e ".[vision]"          # YOLO object detection (heavy — pulls torch)
 pip install -e ".[dev]"             # pytest, ruff, mypy
 ```
@@ -168,7 +169,10 @@ mode: "wake"            # wake | text | voice
 
 ### Voice input (STT) tuning
 
-Speech capture adapts its silence threshold to your mic and room, but if it cuts
+Speech capture uses a neural VAD ([Silero](https://github.com/snakers4/silero-vad),
+the `vad` extra) for robust speech endpointing — it needs no per-mic threshold
+tuning. Without the `[vad]` extra it falls back to an adaptive energy-based VAD
+(`vad_backend: "rms"`), which adapts its threshold to your room. If capture cuts
 you off, misses quiet speech, or mishears, run the diagnostic to see exactly
 what it hears and calibrate:
 

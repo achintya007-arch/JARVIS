@@ -98,3 +98,35 @@ class TestAdaptiveThreshold:
     def test_non_adaptive_is_fixed(self):
         _, info = _run([0.01, 0.01, 0.1, 0.1, 0.0, 0.0, 0.0], adaptive=False)
         assert info["threshold"] == 0.01
+
+
+class TestScoreFnBackend:
+    """The score_fn path (e.g. Silero speech probabilities) uses a fixed
+    threshold and the same onset/endpoint state machine."""
+
+    def _run_scored(self, probs, **over):
+        # Each "chunk" encodes its speech probability in element 0; score_fn
+        # reads it back. Exercises the neural-VAD branch without a model.
+        chunks = [np.full(4, p, dtype=np.float32) for p in probs]
+        it = iter(chunks)
+
+        def _next():
+            return next(it, None)
+
+        params = {**_BASE, **over,
+                  "base_threshold": 0.5, "adaptive": True,
+                  "score_fn": lambda c: float(c[0])}
+        return _vad_collect(_next, **params)
+
+    def test_speech_probs_capture_and_end(self):
+        # low, HIGH HIGH HIGH (prob>0.5), then low (prob<0.3 end) x3
+        audio, info = self._run_scored([0.1, 0.9, 0.9, 0.9, 0.0, 0.0, 0.0])
+        assert audio is not None
+        assert info["reason"] == "end_silence"
+        assert info["threshold"] == 0.5   # fixed, not adaptively calibrated
+
+    def test_low_prob_noise_does_not_trigger(self):
+        # Non-speech noise sits at prob ~0.1 — must never start capture.
+        audio, info = self._run_scored([0.1] * 8, onset_timeout_chunks=6)
+        assert audio is None
+        assert info["reason"] == "onset_timeout"

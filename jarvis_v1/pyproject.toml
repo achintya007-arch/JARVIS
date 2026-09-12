@@ -53,6 +53,12 @@ data = [
 piper = [
     "piper-tts==1.8.0",
 ]
+# Neural voice-activity detection (Silero) — robust speech endpointing that
+# needs no per-mic threshold tuning. Pulls torch (CPU is fine). Without it,
+# STTEngine falls back to the adaptive RMS VAD automatically.
+vad = [
+    "silero-vad==6.2.1",
+]
 dev = [
     "pytest==8.3.4",
     "pytest-asyncio==0.25.2",
