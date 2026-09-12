@@ -33,33 +33,9 @@ class TestVoiceConfig:
         assert "Hz" in c.pitch
 
 
-# ── Barge-in phrase gating (needs the brain stack) ────────────────────────────
-
-class TestBargeInPatterns:
-    def setup_method(self):
-        pytest.importorskip("numpy")
-        pytest.importorskip("sounddevice")
-        pytest.importorskip("faster_whisper")
-        from core_v3.brain import _INTERRUPT_RE, _STOP_ONLY_RE
-        self.interrupt = _INTERRUPT_RE
-        self.stop_only = _STOP_ONLY_RE
-
-    def test_interrupt_words_detected(self):
-        for phrase in ["stop", "wait", "hold on", "cancel that", "jarvis do this"]:
-            assert self.interrupt.search(phrase), phrase
-
-    def test_ambient_not_interrupt(self):
-        # Ordinary chatter shouldn't trip barge-in
-        for phrase in ["the weather is nice", "i think so", "okay then"]:
-            assert not self.interrupt.search(phrase), phrase
-
-    def test_stop_only_vs_command(self):
-        assert self.stop_only.match("stop")
-        assert self.stop_only.match("stop jarvis")
-        assert self.stop_only.match("hold on")
-        # Carries a new instruction — NOT a bare stop
-        assert not self.stop_only.match("jarvis what's the weather")
-        assert not self.stop_only.match("wait what time is it")
+# NOTE: barge-in is now VAD-based in the V3 voice rebuild (InterruptionController
+# via Silero), not phrase-matched — see tests/test_voice_orchestrator.py. The old
+# _INTERRUPT_RE/_STOP_ONLY_RE phrase-gating test was removed with that code.
 
 
 # ── TTS interrupt mechanics (needs audio deps) ────────────────────────────────

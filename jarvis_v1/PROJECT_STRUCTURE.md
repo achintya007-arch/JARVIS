@@ -34,19 +34,28 @@ jarvis_v1/
 │
 ├── core_v3/                # V3 orchestrator — ACTIVE DEFAULT
 │   ├── __main__.py         # Entry point  (python -m core_v3)
-│   ├── brain.py            # Vault-centric brain + wake-word voice loop,
-│   │                       #   barge-in, sentence-streamed TTS
-│   ├── adapters.py
+│   ├── brain.py            # Composition root: wires cognition + voice layer
+│   ├── conversation.py     # ConversationEngine — text → response sentences
+│   │                       #   (clean cognition boundary; no audio)
+│   ├── voice/              # Voice state machine + orchestration
+│   │   ├── state.py        #   VoiceState / VoiceStateManager
+│   │   ├── orchestrator.py #   VoiceOrchestrator (IDLE→LISTEN→PROCESS→SPEAK)
+│   │   └── interruption.py #   InterruptionController (barge-in via Silero)
+│   ├── adapters.py         # ResourceAdapter (model switching on pressure)
 │   ├── event_bus.py
 │   └── events.py
 │
-├── perception/
-│   ├── stt.py              # faster-whisper STT (base.en, CUDA int8),
-│   │                       #   hallucination gating, single mic owner
-│   ├── tts.py              # edge-tts TTS with interrupt() for barge-in
-│   ├── hotword.py          # Wake-word detector + fuzzy "jarvis" matcher
-│   ├── cues.py             # Audio cues (wake chime, etc.)
-│   └── vision.py           # Optional YOLO object detection ([vision] extra)
+├── perception/            # voice primitives (small, single-purpose)
+│   ├── microphone.py      # MicrophoneInput — single mic owner, async fan-out
+│   ├── wakeword.py        # WakeWordDetector — openWakeWord "hey_jarvis" (V3)
+│   ├── endpointer.py      # EndpointDetector — Silero VAD onset/endpoint (V3)
+│   ├── stt.py             # STTEngine — faster-whisper transcription (+ legacy
+│   │                      #   mic/VAD capture still used by V2/legacy)
+│   ├── tts.py             # TTSEngine — Piper/edge synthesis (+ V2 queue/speak)
+│   ├── audio_player.py    # AudioPlayer — cancellable playback + interrupt() (V3)
+│   ├── hotword.py         # tiny.en wake (V2/legacy only; V3 uses wakeword.py)
+│   ├── cues.py            # Audio cues (wake chime, etc.)
+│   └── vision.py          # Optional YOLO object detection ([vision] extra)
 │
 ├── cognition/
 │   ├── llm_client.py       # Ollama streaming client; sentence_stream() for TTS;

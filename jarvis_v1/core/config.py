@@ -88,13 +88,48 @@ class STTConfig:
 @dataclass
 class TTSConfig:
     engine: str = "piper"
-    voice: str = "en_US-ryan-high"
+    # Default to lessac-medium: its first-audio latency is lower and more
+    # CONSISTENT than en_US-ryan-high (which is richer but slower per sentence).
+    # Swap voice to "en_US-ryan-high" for higher quality at some latency cost.
+    voice: str = "en_US-lessac-medium"
     speed: float = 1.0
     device: str = "cuda"
     # edge-tts prosody — a slightly slower rate reads as composed / deliberate,
     # which suits JARVIS. Format: rate "+/-N%", pitch "+/-NHz".
     rate: str = "-4%"
     pitch: str = "+0Hz"
+
+
+# =========================
+# WAKE WORD (V3 voice layer)
+# =========================
+@dataclass
+class WakeConfig:
+    """Dedicated wake-word detector (openWakeWord), replacing the tiny.en
+    Whisper-window approach. Runs on CPU (~3ms/frame)."""
+    enabled: bool = True
+    model: str = "hey_jarvis"        # openWakeWord pretrained model name
+    threshold: float = 0.5           # detection score [0,1]
+    # "Echo"/other names need a custom-trained openWakeWord model; point this at
+    # a local .onnx path to use one.
+    inference_framework: str = "onnx"
+
+
+# =========================
+# VOICE LAYER (V3 state machine)
+# =========================
+@dataclass
+class VoiceConfig:
+    """Tunables for the V3 voice state machine (IDLE/LISTENING/PROCESSING/
+    SPEAKING/INTERRUPTED). Endpoint/VAD tunables live in STTConfig."""
+    frame_ms: int = 80               # mic frame size (openWakeWord native = 80ms)
+    chime_on_wake: bool = True
+    # Barge-in: sustained speech (seconds) while SPEAKING that triggers an
+    # interrupt. Higher = less likely to self-trigger on speaker echo; use
+    # headphones for the most reliable barge-in (no acoustic echo).
+    interrupt_speech_sec: float = 0.4
+    interrupt_silero_threshold: float = 0.6
+    allow_barge_in: bool = True
 
 
 # =========================
@@ -190,6 +225,8 @@ class Config:
     stt: STTConfig = field(default_factory=STTConfig)
     tts: TTSConfig = field(default_factory=TTSConfig)
     hotword: HotwordConfig = field(default_factory=HotwordConfig)
+    wake: WakeConfig = field(default_factory=WakeConfig)
+    voice: VoiceConfig = field(default_factory=VoiceConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     resources: ResourceConfig = field(default_factory=ResourceConfig)
     vault: VaultConfig = field(default_factory=VaultConfig)

@@ -156,6 +156,20 @@ class TTSEngine:
         await self.enqueue(text)
         await self.drain()
 
+    async def synthesize(self, text: str) -> tuple[int, np.ndarray] | None:
+        """Synthesize one piece of text → (sample_rate, float32 mono samples),
+        WITHOUT queueing/playing. The V3 voice layer uses this and drives
+        playback through its own AudioPlayer; V2 uses enqueue/speak instead.
+        Lazy-loads Piper on first call so callers need not run initialize()."""
+        text = _clean(text)
+        if not text:
+            return None
+        if self._piper is None and self._engine == "piper":
+            self._piper = await asyncio.to_thread(self._load_piper)
+            if self._piper is None:
+                self._engine = "edge"
+        return await asyncio.to_thread(self._synthesize, text)
+
     async def drain(self) -> None:
         done = asyncio.Event()
         await self._queue.put(done)

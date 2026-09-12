@@ -88,10 +88,35 @@ cd jarvis_v1
 pip install -r requirements.txt     # pinned core dependencies
 
 # optional feature sets:
-pip install -e ".[piper]"           # local offline TTS (recommended — see below)
-pip install -e ".[vad]"             # neural voice-activity detection (Silero; recommended)
+pip install -e ".[voice]"           # full V3 voice layer: Piper TTS + Silero VAD + openWakeWord (recommended)
 pip install -e ".[vision]"          # YOLO object detection (heavy — pulls torch)
 pip install -e ".[dev]"             # pytest, ruff, mypy
+# (or install the voice pieces individually: .[piper] .[vad] .[wakeword])
+```
+
+### V3 voice layer
+
+The V3 voice interaction is an explicit, cancellation-aware state machine —
+**IDLE → LISTENING → PROCESSING → SPEAKING → (INTERRUPTED)** — built from small,
+separately-testable parts (`perception/microphone.py`, `wakeword.py`,
+`endpointer.py`, `audio_player.py`; `core_v3/voice/`):
+
+- **Wake word:** a dedicated [openWakeWord](https://github.com/dscripka/openWakeWord)
+  model (pretrained **"hey jarvis"**, ~3 ms/frame on CPU) — say *"hey jarvis"*.
+- **Endpointing:** Silero VAD decides when you've actually finished speaking, so
+  a mid-sentence pause ("open Chrome and then— actually, VS Code instead") isn't
+  cut off.
+- **Speaking:** Piper streams sentence-by-sentence; audio starts on the first
+  sentence while the rest is still being generated.
+- **Barge-in:** while Echo is speaking the mic keeps listening — start talking
+  and playback stops immediately, generation is cancelled, and it re-listens.
+  *Use headphones for the most reliable barge-in (open speakers can echo into
+  the mic).* Tune or disable via `VoiceConfig`.
+
+Validate it live (prints wake→first-audio and end-of-speech→first-audio latencies):
+
+```powershell
+.\run.ps1 -MicSmoke        # or:  python -m tools.mic_smoke
 ```
 
 ### Text-to-speech: local Piper (default) vs. cloud edge-tts

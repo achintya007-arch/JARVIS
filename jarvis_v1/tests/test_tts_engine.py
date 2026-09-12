@@ -34,9 +34,10 @@ class TestEngineSelection:
     def test_defaults_to_piper(self):
         eng = TTSEngine(TTSConfig())
         assert eng._engine == "piper"
-        assert eng._model_name == "en_US-ryan-high"
+        # Default voice is now en_US-lessac-medium (consistent low latency).
+        assert eng._model_name == "en_US-lessac-medium"
         # edge fallback voice is resolved up front from the model name
-        assert eng._voice == "en-US-ChristopherNeural"
+        assert eng._voice == "en-US-GuyNeural"
 
     def test_explicit_edge_voice_preserved(self):
         cfg = TTSConfig(); cfg.engine = "edge"; cfg.voice = "en-US-JennyNeural"

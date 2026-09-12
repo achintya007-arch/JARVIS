@@ -55,9 +55,20 @@ piper = [
 ]
 # Neural voice-activity detection (Silero) — robust speech endpointing that
 # needs no per-mic threshold tuning. Pulls torch (CPU is fine). Without it,
-# STTEngine falls back to the adaptive RMS VAD automatically.
+# the endpointer falls back to the adaptive RMS VAD automatically.
 vad = [
     "silero-vad==6.2.1",
+]
+# Dedicated wake-word detector (openWakeWord, pretrained "hey_jarvis"). ~3ms/
+# frame on CPU. Without it the voice layer has no wake word (use text mode).
+wakeword = [
+    "openwakeword==0.6.0",
+]
+# Everything the V3 voice layer wants, in one install.
+voice = [
+    "piper-tts==1.8.0",
+    "silero-vad==6.2.1",
+    "openwakeword==0.6.0",
 ]
 dev = [
     "pytest==8.3.4",

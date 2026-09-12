@@ -16,7 +16,8 @@ param(
     [switch]$Text,      # keyboard input instead of voice
     [switch]$Test,      # run pytest and exit
     [switch]$VoiceTest, # run tools/voice_test.py and exit
-    [switch]$MicCheck   # run tools/mic_check.py and exit
+    [switch]$MicCheck,  # run tools/mic_check.py and exit
+    [switch]$MicSmoke   # run tools/mic_smoke.py (V3 voice end-to-end) and exit
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,6 +43,12 @@ if ($VoiceTest) {
 if ($MicCheck) {
     Info "Launching mic / STT diagnostic (see tools/mic_check.py)..."
     python -m tools.mic_check
+    exit $LASTEXITCODE
+}
+
+if ($MicSmoke) {
+    Info "Launching V3 voice end-to-end smoke test (see tools/mic_smoke.py)..."
+    python -m tools.mic_smoke
     exit $LASTEXITCODE
 }
 
