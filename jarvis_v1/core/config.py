@@ -125,10 +125,10 @@ class VoiceConfig:
     frame_ms: int = 80               # mic frame size (openWakeWord native = 80ms)
     chime_on_wake: bool = True
     # Barge-in: sustained speech (seconds) while SPEAKING that triggers an
-    # interrupt. Higher = less likely to self-trigger on speaker echo; use
-    # headphones for the most reliable barge-in (no acoustic echo).
-    interrupt_speech_sec: float = 0.4
-    interrupt_silero_threshold: float = 0.6
+    # interrupt. Lower = snappier but more likely to self-trigger on speaker
+    # echo; use headphones for the most reliable barge-in (no acoustic echo).
+    interrupt_speech_sec: float = 0.3
+    interrupt_silero_threshold: float = 0.5
     allow_barge_in: bool = True
 
 

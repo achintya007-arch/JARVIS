@@ -75,46 +75,54 @@ class VoiceOrchestrator:
     async def run(self) -> None:
         while self._running:
             try:
-                await self._await_wake()
+                q = await self._await_wake()
                 if not self._running:
                     break
+                # Chime plays WITHOUT blocking capture, and we keep the SAME mic
+                # subscription straight into LISTENING — so a command spoken right
+                # after the wake word ("hey jarvis, open Chrome") isn't clipped.
                 if self._cfg.chime_on_wake:
-                    await self._chime()
-                await self._conversation_turn()
+                    asyncio.create_task(self._chime())
+                await self._conversation_turn(initial_q=q)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 log.error("voice loop error: %s", e, exc_info=True)
                 self.state.transition(VoiceState.IDLE)
 
-    async def _await_wake(self) -> None:
+    async def _await_wake(self) -> asyncio.Queue | None:
+        """Wait for the wake word. Returns the LIVE mic subscription (still
+        receiving frames) so the caller can capture the command with no gap."""
         self.state.transition(VoiceState.IDLE)
         if not self._wake.available:
             # No wake model: wait briefly and treat silence as no-op (text mode
             # should be used instead). Avoids a hot loop.
             await asyncio.sleep(0.5)
-            return
+            return None
         self._wake.reset()
         q = self._mic.subscribe()
-        try:
-            print('\n[Echo] Idle — say "hey jarvis"\n', flush=True)
-            while self._running:
-                frame = await q.get()
-                if self._wake.triggered(frame):
-                    log.info("wake word detected")
-                    return
-        finally:
-            self._mic.unsubscribe(q)
+        print('\n[Echo] Idle — say "hey jarvis"\n', flush=True)
+        while self._running:
+            frame = await q.get()
+            if self._wake.triggered(frame):
+                log.info("wake word detected")
+                return q
+        self._mic.unsubscribe(q)
+        return None
 
-    async def _conversation_turn(self) -> None:
+    async def _conversation_turn(self, initial_q: asyncio.Queue | None = None) -> None:
         """One wake-initiated interaction: listen → process → speak, looping back
         to LISTENING on barge-in, and to IDLE when the turn completes."""
         preroll: list | None = None
         while self._running:
-            # LISTENING
+            # LISTENING — reuse the live wake subscription for the FIRST capture
+            # (no gap → no clipped command onset); fresh subscription afterward.
             self.state.transition(VoiceState.LISTENING)
             print("[Echo] Listening...", flush=True)
-            q = self._mic.subscribe()
+            if initial_q is not None:
+                q, initial_q = initial_q, None
+            else:
+                q = self._mic.subscribe()
             try:
                 audio, reason = await self._endpointer.capture(q, preroll=preroll)
             finally:
