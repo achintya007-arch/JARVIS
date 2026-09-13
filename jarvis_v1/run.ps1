@@ -32,7 +32,7 @@ function Warn($m)  { Write-Host "[warn] $m" -ForegroundColor Yellow }
 # Python, which lacks them and silently disables wake detection + neural VAD
 # (JARVIS then listens continuously and mis-transcribes ambient noise).
 $Py = Join-Path $PSScriptRoot "venv\Scripts\python.exe"
-if (-not (Test-Path $Py)) { $Py = "python"; Warn "venv not found — using system 'python' (voice deps may be missing)." }
+if (-not (Test-Path $Py)) { $Py = "python"; Warn "venv not found - using system 'python' (voice deps may be missing)." }
 
 # -- Test mode ------------------------------------------------------------
 if ($Test) {
@@ -66,7 +66,7 @@ Info "Preflight checks..."
 try { $pyver = (& $Py --version) 2>&1; Ok "Python: $pyver ($Py)" }
 catch { Warn "Python not found."; exit 1 }
 
-# Voice dependencies — warn clearly if missing (wake word + neural VAD need them).
+# Voice dependencies - warn clearly if missing (wake word + neural VAD need them).
 $voiceMissing = (& $Py -c "import importlib.util as u; print(','.join(m for m in ('openwakeword','silero_vad','piper') if u.find_spec(m) is None))") 2>&1
 if ($voiceMissing) {
     Warn "Missing voice deps: $voiceMissing"
