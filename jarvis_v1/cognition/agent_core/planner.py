@@ -659,11 +659,15 @@ class AgentCore:
         executor: AgentExecutor,
         max_turns: int = 5,
         stream_to_stdout: bool = True,
+        tools: list | None = None,
     ):
         self.llm = llm
         self.executor = executor
         self.max_turns = max_turns
         self.stream_to_stdout = stream_to_stdout
+        # Full tool set (core + screen/keyboard) so the agent can type, focus
+        # windows, launch apps, etc. — not just the 21 core tools.
+        self.tools = tools if tools is not None else build_tool_schemas()
 
     async def run(self, messages: list[dict]) -> AgentResult:
         state = TurnState(messages=list(messages))
@@ -743,7 +747,7 @@ class AgentCore:
         chunks: list[str] = []
         raw_message: dict = {}
 
-        async for chunk, message in self.llm.stream_with_message(messages, tools=TOOL_SCHEMAS):
+        async for chunk, message in self.llm.stream_with_message(messages, tools=self.tools):
             chunks.append(chunk)
             raw_message = message
             if self.stream_to_stdout and chunk:

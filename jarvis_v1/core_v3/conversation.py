@@ -20,7 +20,7 @@ import re
 from collections.abc import AsyncIterator
 from datetime import datetime
 
-from cognition.agent_core.planner import TOOL_SCHEMAS
+from cognition.agent_core.planner import build_tool_schemas
 from cognition.decision_engine import Decision
 from cognition.llm_client import build_system_prompt
 
@@ -62,6 +62,12 @@ class ConversationEngine:
         self._executor = executor
         self._agent_core = agent_core
         self._fast_router = fast_router
+        # Offer the FULL tool set to the LLM (core + screen/keyboard) so it can
+        # actually type, focus windows, launch apps — the screen tools were
+        # implemented but never sent, so the model narrated actions instead of
+        # calling them.
+        screen_on = getattr(getattr(config, "agent", None), "screen_enabled", True)
+        self._tools = build_tool_schemas(screen_enabled=screen_on)
 
     async def respond(self, text: str) -> AsyncIterator[str]:
         """Yield spoken-response sentences for the utterance `text`. Cancellable."""
@@ -138,7 +144,7 @@ class ConversationEngine:
         sentences: list[str] = []
         last_message_out: list = []
         async for sentence in self._llm.sentence_stream(
-            messages, tools=TOOL_SCHEMAS, system_prompt=sys_prompt,
+            messages, tools=self._tools, system_prompt=sys_prompt,
             last_message_out=last_message_out,
         ):
             cleaned = _clean(sentence)

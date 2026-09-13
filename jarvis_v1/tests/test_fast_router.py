@@ -41,6 +41,43 @@ class TestRouting:
         assert r().route("remind me to open the door") is None
 
 
+class TestYouTube:
+    def test_play_on_youtube_searches(self):
+        res = r().route("play purple rain on youtube")
+        assert res.tool == "open_url"
+        assert "search_query=purple+rain" in res.args["url"]
+
+    def test_bare_play_searches_youtube(self):
+        res = r().route("play hootie frootie by katseye")
+        assert res.tool == "open_url" and "search_query=hootie+frootie" in res.args["url"]
+
+    def test_play_known_app_still_opens_app(self):
+        assert r().route("play spotify").tool == "open_app"
+
+    def test_search_youtube_for(self):
+        res = r().route("search youtube for lofi beats")
+        assert res.tool == "open_url" and "search_query=lofi+beats" in res.args["url"]
+
+    def test_open_youtube_unchanged(self):
+        res = r().route("open youtube")
+        assert res.tool == "open_url" and res.args["url"] == "https://youtube.com"
+
+    def test_compound_open_and_play(self):
+        res = r().route("open google and play purple rain in youtube")
+        assert isinstance(res, list) and len(res) == 2
+        assert res[0].args["url"] == "https://google.com"
+        assert "search_query=purple+rain" in res[1].args["url"]
+
+
+class TestWakeStrip:
+    def test_leading_jarvis_stripped(self):
+        assert r().route("jarvis what time is it").tool == "get_time"
+
+    def test_hey_jarvis_stripped(self):
+        res = r().route("hey jarvis open chrome")
+        assert res.tool == "open_app" and "chrome" in res.args["command"]
+
+
 class TestCompound:
     def test_compound_returns_list(self):
         res = r().route("open chrome and open spotify")

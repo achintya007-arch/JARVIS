@@ -165,18 +165,22 @@ class Brain:
         log.info("Brain V3 shutting down...")
         if self._goal_task:
             self._goal_task.cancel()
-        for label, coro in (
-            ("orchestrator", self._orchestrator.stop() if self._orchestrator else None),
-            ("goal_manager", self._goal_manager.close()),
-            ("resource_monitor", self._resource_monitor.stop()),
-            ("executor", self._executor.shutdown()),
-            ("tts", self._tts.shutdown()),
-            ("vault_memory", self._vault_memory.close()),
-        ):
-            if coro is None:
+        # Lazily create each teardown coroutine only when awaited — building them
+        # all upfront left later ones un-awaited (RuntimeWarning) if an earlier
+        # step was cancelled during shutdown.
+        steps = [
+            ("orchestrator",     self._orchestrator.stop if self._orchestrator else None),
+            ("goal_manager",     self._goal_manager.close),
+            ("resource_monitor", self._resource_monitor.stop),
+            ("executor",         self._executor.shutdown),
+            ("tts",              self._tts.shutdown),
+            ("vault_memory",     self._vault_memory.close),
+        ]
+        for label, make in steps:
+            if make is None:
                 continue
             try:
-                await coro
+                await make()
             except Exception as e:
                 log.warning("shutdown step '%s' failed: %s", label, e)
         self._stop_event.set()

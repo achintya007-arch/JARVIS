@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from urllib.parse import quote_plus
 
 
 @dataclass(frozen=True)
@@ -104,9 +105,21 @@ class FastRouter:
     # Single launcher regex — only fires when the verb is the FIRST word.
     # Using ^ (not \b) prevents "remind me to open X" from triggering launch.
     _LAUNCH = re.compile(
-        r"^(?:open|launch|start|play)\s+(?:up\s+)?(.+?)(?:\s+(?:please|now|for me))?\s*$",
+        r"^(?P<verb>open|launch|start|play)\s+(?:up\s+)?(?P<target>.+?)(?:\s+(?:please|now|for me))?\s*$",
         re.IGNORECASE,
     )
+
+    # "search youtube for X" / "youtube X" → YouTube search. ("play X on youtube"
+    # is handled by the launcher's play verb below.)
+    _YT_SEARCH = re.compile(
+        r"^search\s+youtube\s+for\s+(?P<q>.+)$"
+        r"|^youtube\s+(?:search\s+(?:for\s+)?)?(?P<q2>.+)$",
+        re.IGNORECASE,
+    )
+    _YT_TAIL = re.compile(r"\s+(?:on|in|from|through|via)\s+youtube$", re.IGNORECASE)
+
+    # Leading wake word that bleeds into a continuous "hey jarvis, <command>".
+    _WAKE_PREFIX = re.compile(r"^(?:hey\s+|ok\s+|okay\s+)?(?:jarvis|echo)\b[\s,]*", re.IGNORECASE)
 
     # ── Volume ────────────────────────────────────────────────────────────────
     _VOLUME_SET = re.compile(
@@ -206,11 +219,16 @@ class FastRouter:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def _normalize(self, text: str) -> str:
-        """Lowercase + apply STT mishear corrections before regex matching."""
+        """Lowercase, strip a bled-in wake word, and apply STT mishear fixes."""
         text = text.strip().lower()
+        text = self._WAKE_PREFIX.sub("", text, count=1)
         for pattern, replacement in self._STT_REPLACEMENTS:
             text = pattern.sub(replacement, text)
-        return text
+        return text.strip()
+
+    def _youtube_search(self, query: str) -> RouteResult:
+        url = "https://www.youtube.com/results?search_query=" + quote_plus(query)
+        return RouteResult(tool="open_url", args={"url": url, "name": f"YouTube search for {query}"})
 
     def route(self, text: str):
         text = self._normalize(text)
@@ -309,6 +327,13 @@ class FastRouter:
             if txt:
                 return RouteResult(tool="append_to_daily_note", args={"text": txt})
 
+        # ── YouTube search — "search youtube for X" / "youtube X" ──────────
+        m = self._YT_SEARCH.search(text)
+        if m:
+            q = (m.group("q") or m.group("q2") or "").strip()
+            if q:
+                return self._youtube_search(q)
+
         # Bare target — handles compound split arms with no verb (e.g. "spotify", "notepad")
         if text in self._APP_MAP:
             cmd, name = self._APP_MAP[text]
@@ -320,13 +345,22 @@ class FastRouter:
         # Universal launcher — one pattern, table-driven dispatch
         m = self._LAUNCH.search(text)
         if m:
-            target = m.group(1).strip()
+            verb   = m.group("verb").lower()
+            target = m.group("target").strip()
+            # Exact app / URL match wins ("play spotify" → Spotify, "open youtube" → YouTube).
             if target in self._URL_MAP:
                 url, name = self._URL_MAP[target]
                 return RouteResult(tool="open_url", args={"url": url, "name": name})
             if target in self._APP_MAP:
                 cmd, name = self._APP_MAP[target]
                 return RouteResult(tool="open_app", args={"command": cmd, "name": name})
+            # "play <X> [on youtube]" → YouTube search for X (can't autoplay a
+            # specific video, but opens the results). Only for the "play" verb.
+            if verb == "play":
+                q = self._YT_TAIL.sub("", target).strip()
+                if q:
+                    return self._youtube_search(q)
+            # Fuzzy substring for open/launch/start ("open google chrome" → chrome).
             for key, (cmd, name) in self._APP_MAP.items():
                 if key in target:
                     return RouteResult(tool="open_app", args={"command": cmd, "name": name})
