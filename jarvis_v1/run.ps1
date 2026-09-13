@@ -27,28 +27,35 @@ function Info($m)  { Write-Host "[ i ] $m" -ForegroundColor Cyan }
 function Ok($m)    { Write-Host "[ok ] $m" -ForegroundColor Green }
 function Warn($m)  { Write-Host "[warn] $m" -ForegroundColor Yellow }
 
+# Use the project venv's interpreter if present. It has the voice dependencies
+# (openWakeWord, Silero VAD + torch, Piper). Bare `python` is usually the SYSTEM
+# Python, which lacks them and silently disables wake detection + neural VAD
+# (JARVIS then listens continuously and mis-transcribes ambient noise).
+$Py = Join-Path $PSScriptRoot "venv\Scripts\python.exe"
+if (-not (Test-Path $Py)) { $Py = "python"; Warn "venv not found — using system 'python' (voice deps may be missing)." }
+
 # -- Test mode ------------------------------------------------------------
 if ($Test) {
     Info "Running test suite..."
-    python -m pytest tests/ -q
+    & $Py -m pytest tests/ -q
     exit $LASTEXITCODE
 }
 
 if ($VoiceTest) {
     Info "Launching voice A/B tester (see tools/voice_test.py --help for options)..."
-    python -m tools.voice_test
+    & $Py -m tools.voice_test
     exit $LASTEXITCODE
 }
 
 if ($MicCheck) {
     Info "Launching mic / STT diagnostic (see tools/mic_check.py)..."
-    python -m tools.mic_check
+    & $Py -m tools.mic_check
     exit $LASTEXITCODE
 }
 
 if ($MicSmoke) {
     Info "Launching V3 voice end-to-end smoke test (see tools/mic_smoke.py)..."
-    python -m tools.mic_smoke
+    & $Py -m tools.mic_smoke
     exit $LASTEXITCODE
 }
 
@@ -56,8 +63,18 @@ if ($MicSmoke) {
 Info "Preflight checks..."
 
 # Python
-try { $py = (python --version) 2>&1; Ok "Python: $py" }
-catch { Warn "Python not found on PATH."; exit 1 }
+try { $pyver = (& $Py --version) 2>&1; Ok "Python: $pyver ($Py)" }
+catch { Warn "Python not found."; exit 1 }
+
+# Voice dependencies — warn clearly if missing (wake word + neural VAD need them).
+$voiceMissing = (& $Py -c "import importlib.util as u; print(','.join(m for m in ('openwakeword','silero_vad','piper') if u.find_spec(m) is None))") 2>&1
+if ($voiceMissing) {
+    Warn "Missing voice deps: $voiceMissing"
+    Warn "  Install with:  $Py -m pip install -e `".[voice]`""
+    Warn "  Without them: wake word disabled + RMS-only VAD (degraded voice UX)."
+} else {
+    Ok "Voice deps present (openWakeWord, Silero, Piper)."
+}
 
 # Ollama reachable?
 $ollamaOk = $false
@@ -88,8 +105,8 @@ else       { Remove-Item Env:\JARVIS_MODE -ErrorAction SilentlyContinue; Info "M
 Write-Host ""
 if ($V2) {
     Info "Launching V2 (core_v2 brain) -- Ctrl+C to stop"
-    python main.py
+    & $Py main.py
 } else {
     Info "Launching V3 (vault brain) -- Ctrl+C to stop"
-    python -m core_v3
+    & $Py -m core_v3
 }
