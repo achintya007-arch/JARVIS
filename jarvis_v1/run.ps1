@@ -17,7 +17,8 @@ param(
     [switch]$Test,      # run pytest and exit
     [switch]$VoiceTest, # run tools/voice_test.py and exit
     [switch]$MicCheck,  # run tools/mic_check.py and exit
-    [switch]$MicSmoke   # run tools/mic_smoke.py (V3 voice end-to-end) and exit
+    [switch]$MicSmoke,  # run tools/mic_smoke.py (V3 voice end-to-end) and exit
+    [switch]$WakeCheck  # run tools/wake_check.py (wake-word score meter) and exit
 )
 
 $ErrorActionPreference = "Stop"
@@ -56,6 +57,12 @@ if ($MicCheck) {
 if ($MicSmoke) {
     Info "Launching V3 voice end-to-end smoke test (see tools/mic_smoke.py)..."
     & $Py -m tools.mic_smoke
+    exit $LASTEXITCODE
+}
+
+if ($WakeCheck) {
+    Info "Launching wake-word score meter (see tools/wake_check.py)..."
+    & $Py -m tools.wake_check
     exit $LASTEXITCODE
 }
 

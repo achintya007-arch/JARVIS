@@ -109,7 +109,7 @@ class WakeConfig:
     Whisper-window approach. Runs on CPU (~3ms/frame)."""
     enabled: bool = True
     model: str = "hey_jarvis"        # openWakeWord pretrained model name
-    threshold: float = 0.5           # detection score [0,1]
+    threshold: float = 0.4           # detection score [0,1]; lower = more sensitive
     # "Echo"/other names need a custom-trained openWakeWord model; point this at
     # a local .onnx path to use one.
     inference_framework: str = "onnx"
