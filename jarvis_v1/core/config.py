@@ -181,8 +181,12 @@ class AgentConfig:
 class ResourceConfig:
     poll_interval_sec: float = 2.0
 
-    # Less aggressive switching
-    max_ram_pct: float = 0.85
+    # RAM baseline with the 7B model loaded sits ~82-87%, so a 0.85 threshold
+    # made the model switch flap every couple of seconds (7b<->3b), churning
+    # Ollama and the event loop — which starved the wake-word frame stream and
+    # stopped "hey jarvis" from firing. Raise it so switching only happens under
+    # genuine pressure, not on normal baseline oscillation.
+    max_ram_pct: float = 0.93
     max_vram_mb: float = 6500
 
     idle_timeout_sec: int = 60

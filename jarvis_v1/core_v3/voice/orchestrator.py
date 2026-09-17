@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from datetime import datetime
 
 from core_v3.voice.state import VoiceState, VoiceStateManager
@@ -102,11 +103,27 @@ class VoiceOrchestrator:
         self._wake.reset()
         q = self._mic.subscribe()
         print('\n[Echo] Idle — say "hey jarvis"\n', flush=True)
+        # Instrumentation: every ~4s report frames seen + peak score, so if wake
+        # never fires we can tell whether frames are arriving (mic/loop healthy)
+        # and how close the score got (threshold tuning) vs. a dead stream.
+        frames = 0
+        peak = 0.0
+        last_report = time.perf_counter()
         while self._running:
             frame = await q.get()
-            if self._wake.triggered(frame):
-                log.info("wake word detected")
+            frames += 1
+            score = self._wake.score(frame)
+            peak = max(peak, score)
+            if score >= self._wake.threshold:
+                log.info("wake word detected (score=%.2f)", score)
                 return q
+            now = time.perf_counter()
+            if now - last_report >= 4.0:
+                log.info("wake idle: %d frames in 4s, peak score=%.2f (thr=%.2f)",
+                         frames, peak, self._wake.threshold)
+                frames = 0
+                peak = 0.0
+                last_report = now
         self._mic.unsubscribe(q)
         return None
 
