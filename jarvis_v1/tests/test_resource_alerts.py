@@ -58,6 +58,25 @@ class TestEdgeTriggeredPressure:
 
         assert calls == [True, False]
 
+    async def test_hysteresis_prevents_flapping_at_threshold(self):
+        # Live bug: RAM hovering 92.6-94.8% against a 93% threshold flapped the
+        # model 7b<->3b. Once in pressure it must drop well below to clear.
+        mon = ResourceMonitor(ResourceConfig())
+        calls = []
+
+        async def cb(metric, value, entering):
+            calls.append(entering)
+
+        mon.on_pressure(cb)
+
+        await mon._check_edge("ram_pct", 94.8, 93.0)   # enter
+        await mon._check_edge("ram_pct", 92.6, 93.0)   # just under — must NOT clear
+        await mon._check_edge("ram_pct", 94.0, 93.0)   # back over — no re-fire
+        assert calls == [True]
+
+        await mon._check_edge("ram_pct", 85.0, 93.0)   # clearly below → clears
+        assert calls == [True, False]
+
     async def test_independent_per_metric(self):
         mon = ResourceMonitor(ResourceConfig())
         calls = []

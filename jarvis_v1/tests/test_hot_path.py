@@ -69,3 +69,32 @@ class TestLlmPathIsTheOnlyMessageConsumer:
             text=text, state=_snapshot(text), memories=[], messages=[],
         )
         assert decision.action_type == "llm"
+
+
+class TestCriticalSystemStateDoesNotHijack:
+    """Live bug: with RAM > 90% every utterance was answered with "system
+    resources are critical" and the user's request was dropped."""
+
+    def _critical_snapshot(self, text):
+        s = AgentState()
+        s.update_from_system(ram_pct=95.0)
+        s.update_from_system(ram_pct=95.0)   # escalation needs 2 ticks
+        s.update_from_input(text)
+        snap = s.snapshot()
+        assert snap.system_state == "critical"
+        return snap
+
+    async def test_question_still_reaches_llm(self):
+        text = "tell me what you think about jazz"
+        decision = await _engine().decide(
+            text=text, state=self._critical_snapshot(text), memories=[], messages=[],
+        )
+        assert decision.action_type == "llm"
+        assert decision.reason != "rule:system_critical"
+
+    async def test_command_still_executes(self):
+        text = "open chrome"
+        decision = await _engine().decide(
+            text=text, state=self._critical_snapshot(text), memories=[], messages=[],
+        )
+        assert decision.action_type == "tool"

@@ -124,9 +124,16 @@ class VoiceConfig:
     SPEAKING/INTERRUPTED). Endpoint/VAD tunables live in STTConfig."""
     frame_ms: int = 80               # mic frame size (openWakeWord native = 80ms)
     chime_on_wake: bool = True
-    # Barge-in: sustained speech (seconds) while SPEAKING that triggers an
-    # interrupt. Lower = snappier but more likely to self-trigger on speaker
-    # echo; use headphones for the most reliable barge-in (no acoustic echo).
+    # Barge-in (interrupting Echo while it speaks):
+    #   "wake" — say "hey jarvis" over Echo to interrupt (default). Echo never
+    #            says the wake word, so its own voice from open speakers can't
+    #            self-trigger. Then say the new command, or "stop".
+    #   "vad"  — ANY sustained speech interrupts. Most natural, but on open
+    #            speakers (no echo cancellation) the mic hears Echo itself and it
+    #            interrupts its own replies. Use with headphones.
+    #   "off"  — no barge-in.
+    barge_in_mode: str = "wake"
+    # "vad" mode tuning: sustained speech (seconds) above this Silero probability.
     interrupt_speech_sec: float = 0.3
     interrupt_silero_threshold: float = 0.5
     allow_barge_in: bool = True

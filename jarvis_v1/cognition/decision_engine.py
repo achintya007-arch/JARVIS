@@ -229,19 +229,11 @@ class DecisionEngine:
         (Goal creation/completion is handled upstream by GoalManager.handle_input.)
         """
 
-        # System critical — always interrupt
-        if state.system_state == "critical":
-            return Decision(
-                action_type  = "speak",
-                priority     = PRIORITY_CRITICAL,
-                content      = (
-                    "Sir, system resources are critical. "
-                    "You may want to close some applications."
-                ),
-                should_act   = True,
-                interrupt_tts = True,
-                reason       = "rule:system_critical",
-            )
+        # NOTE: critical system state is deliberately NOT handled here. It used to
+        # answer EVERY utterance with "resources are critical" while RAM stayed
+        # high, so no command could run. The warning is announced once on the
+        # transition (ResourceAdapter → SpeakRequest), and the LLM's system
+        # prompt carries system_state so it can mention it in context.
 
         # Gratitude — no LLM needed
         if state.conversation_intent == "gratitude":

@@ -83,14 +83,28 @@ if ($voiceMissing) {
     Ok "Voice deps present (openWakeWord, Silero, Piper)."
 }
 
-# Ollama reachable?
+# Ollama reachable? If it's installed but not running, start it and wait until
+# it answers - launching JARVIS before Ollama is ready disables memory recall
+# for the whole session.
+function Get-OllamaTags {
+    try { return Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -TimeoutSec 3 }
+    catch { return $null }
+}
 $ollamaOk = $false
-try {
-    $tags = Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -TimeoutSec 3
+$tags = Get-OllamaTags
+if (-not $tags -and (Get-Command ollama -ErrorAction SilentlyContinue)) {
+    Info "Ollama not running - starting it..."
+    Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden
+    for ($i = 0; $i -lt 20 -and -not $tags; $i++) {
+        Start-Sleep -Seconds 1
+        $tags = Get-OllamaTags
+    }
+}
+if ($tags) {
     $models = $tags.models.name
     $ollamaOk = $true
     Ok "Ollama is up ($($models.Count) model(s))."
-} catch {
+} else {
     Warn "Ollama not reachable at localhost:11434."
     Warn "  Start it with:  ollama serve"
     Warn "  JARVIS will still run, but LLM replies and semantic recall will be unavailable."

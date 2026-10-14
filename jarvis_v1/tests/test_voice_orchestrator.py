@@ -83,12 +83,25 @@ class FakeWake:
     def triggered(self, frame): return True
 
 
-def _orch(*, endpointer, stt, conv, tts=None, player=None, interruption=None, wake=None):
+class CountingWake:
+    """Wake detector that fires on the Nth frame it sees (never if n is None)."""
+    def __init__(self, fire_on=None):
+        self.available, self.fire_on, self.seen = True, fire_on, 0
+    def reset(self): self.seen = 0
+    def triggered(self, frame):
+        self.seen += 1
+        return self.fire_on is not None and self.seen >= self.fire_on
+
+
+def _orch(*, endpointer, stt, conv, tts=None, player=None, interruption=None, wake=None,
+          barge_mode="wake"):
+    cfg = VoiceConfig()
+    cfg.barge_in_mode = barge_mode
     return VoiceOrchestrator(
         mic=FakeMic(), wake=wake or FakeWake(), endpointer=endpointer,
         stt=stt, tts=tts or FakeTTS(), player=player or FakePlayer(),
         interruption=interruption or NoBargeIn(), conversation=conv,
-        voice_config=VoiceConfig(),
+        voice_config=cfg,
     )
 
 
@@ -141,7 +154,7 @@ class TestBargeIn:
         conv = FakeConv(["Sure, the weather is—"], delay=5.0)
         player = FakePlayer()
         orch = _orch(endpointer=ep, stt=FakeSTT("tell me about"), conv=conv,
-                     player=player, interruption=BargeOnce())
+                     player=player, interruption=BargeOnce(), barge_mode="vad")
         orch._running = True
 
         await asyncio.wait_for(orch._conversation_turn(), timeout=3.0)
@@ -169,3 +182,66 @@ class TestFallback:
         orch._running = True
         await asyncio.wait_for(orch._conversation_turn(), timeout=3.0)
         assert player.enqueued == []              # nothing enqueued, no crash
+
+
+def _frames(n):
+    q = asyncio.Queue()
+    for _ in range(n):
+        q.put_nowait(np.zeros(1280, dtype=np.float32))
+    return q
+
+
+class TestWakeBargeIn:
+    """Default barge-in mode: only the wake word interrupts Echo, so Echo's own
+    voice leaking from open speakers can't trigger a self-interrupt loop."""
+
+    async def test_wake_word_interrupts(self):
+        orch = _orch(endpointer=FakeEndpointer([]), stt=FakeSTT(""), conv=FakeConv([]),
+                     wake=CountingWake(fire_on=3))
+        result = await asyncio.wait_for(orch._monitor_barge_in(_frames(5)), timeout=2.0)
+        assert result == []                       # interrupt, no look-back carried
+
+    async def test_own_speech_without_wake_word_does_not_interrupt(self):
+        # Frames keep arriving (Echo talking into the mic) but no wake word.
+        orch = _orch(endpointer=FakeEndpointer([]), stt=FakeSTT(""), conv=FakeConv([]),
+                     wake=CountingWake(fire_on=None))
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(orch._monitor_barge_in(_frames(50)), timeout=0.3)
+
+    async def test_confirmation_speech_ignored(self):
+        orch = _orch(endpointer=FakeEndpointer([]), stt=FakeSTT(""), conv=FakeConv([]),
+                     wake=CountingWake(fire_on=1))
+        orch._confirming = True
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(orch._monitor_barge_in(_frames(5)), timeout=0.3)
+
+
+class TestTranscriptHandling:
+    async def test_wake_prefix_stripped_before_cognition(self):
+        audio = np.zeros(16000, dtype=np.float32)
+        conv = FakeConv(["Opening Chrome, Sir."])
+        orch = _orch(endpointer=FakeEndpointer([(audio, "endpoint")]),
+                     stt=FakeSTT("Hey Jarvis, open Chrome"), conv=conv)
+        orch._running = True
+        await asyncio.wait_for(orch._conversation_turn(), timeout=3.0)
+        assert conv.text == "open Chrome"
+
+    async def test_wake_word_only_keeps_listening(self):
+        audio = np.zeros(16000, dtype=np.float32)
+        ep = FakeEndpointer([(audio, "endpoint"), (None, "onset_timeout")])
+        conv = FakeConv(["should not be said"])
+        orch = _orch(endpointer=ep, stt=FakeSTT("Hey Jarvis."), conv=conv)
+        orch._running = True
+        await asyncio.wait_for(orch._conversation_turn(), timeout=3.0)
+        assert conv.text is None                  # never sent "Hey Jarvis" to cognition
+        assert len(ep.prerolls) == 2              # listened again for the real command
+
+    async def test_bare_stop_ends_turn_quietly(self):
+        audio = np.zeros(16000, dtype=np.float32)
+        conv = FakeConv(["should not be said"])
+        player = FakePlayer()
+        orch = _orch(endpointer=FakeEndpointer([(audio, "endpoint")]),
+                     stt=FakeSTT("Stop."), conv=conv, player=player)
+        orch._running = True
+        await asyncio.wait_for(orch._conversation_turn(), timeout=3.0)
+        assert conv.text is None and player.enqueued == []

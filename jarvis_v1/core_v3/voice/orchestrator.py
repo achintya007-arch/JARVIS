@@ -31,6 +31,15 @@ log = logging.getLogger("jarvis.voice")
 _AFFIRMATIVE_RE = re.compile(
     r"^\s*(?:yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead|affirmative)\b", re.IGNORECASE
 )
+# A wake phrase that bled into the capture ("Hey Jarvis, open Chrome").
+_WAKE_PREFIX_RE = re.compile(
+    r"^\s*(?:(?:hey|hi|ok|okay)[\s,]+)?(?:jarvis|echo)\b[\s,.!?]*", re.IGNORECASE
+)
+# A bare "stop"-type utterance: end the turn quietly instead of asking the LLM.
+_STOP_ONLY_RE = re.compile(
+    r"^\s*(?:stop|cancel|never\s?mind|forget it|that'?s (?:all|it)|quiet|shut up|enough)[\s.!,]*$",
+    re.IGNORECASE,
+)
 
 
 def _time_of_day(now: datetime) -> str:
@@ -157,8 +166,18 @@ class VoiceOrchestrator:
                 return
             print(f"[Heard] {text}", flush=True)
 
+            command = _WAKE_PREFIX_RE.sub("", text, count=1).strip()
+            if not command:
+                # Only the wake word was captured — keep listening for the
+                # actual command (bounded by the endpointer's onset timeout).
+                log.info("only the wake word was heard → still listening")
+                continue
+            if _STOP_ONLY_RE.match(command):
+                log.info("stop phrase (%r) → idle", command)
+                return
+
             # SPEAKING (+ barge-in). Returns interrupting look-back, or None.
-            barge = await self._speak_response(text)
+            barge = await self._speak_response(command)
             if barge is None:
                 return                      # turn complete → IDLE
             self.state.transition(VoiceState.INTERRUPTED)
@@ -173,7 +192,8 @@ class VoiceOrchestrator:
 
         monitor = None
         monitor_q = None
-        if self._cfg.allow_barge_in:
+        mode = getattr(self._cfg, "barge_in_mode", "wake")
+        if self._cfg.allow_barge_in and mode != "off":
             monitor_q = self._mic.subscribe()
             monitor = asyncio.create_task(self._monitor_barge_in(monitor_q))
 
@@ -210,12 +230,32 @@ class VoiceOrchestrator:
         await self._player.wait_idle()      # ...and fully played out
 
     async def _monitor_barge_in(self, q: asyncio.Queue) -> list | None:
+        if getattr(self._cfg, "barge_in_mode", "wake") == "wake":
+            return await self._monitor_wake_barge_in(q)
+        # "vad" mode: any sustained speech interrupts (reliable with headphones;
+        # on open speakers Echo's own voice can trigger it).
         while True:
             frames = await self._interruption.monitor(q)
             if self._confirming:
                 continue                    # ignore the user's confirmation speech
             log.info("barge-in → interrupting speech")
             return frames
+
+    async def _monitor_wake_barge_in(self, q: asyncio.Queue) -> list:
+        """Interrupt only when the wake word is spoken over Echo. Echo never says
+        "hey jarvis" itself, so its own voice leaking from open speakers into the
+        mic can't self-trigger — which is what made "any speech" barge-in loop.
+        Returns an empty look-back: the wake phrase isn't part of the command."""
+        if not self._wake.available:
+            await asyncio.Event().wait()    # no wake model → never barge in
+        self._wake.reset()
+        while True:
+            frame = await q.get()
+            if self._confirming:
+                continue
+            if self._wake.triggered(frame):
+                log.info("barge-in (wake word) → interrupting speech")
+                return []
 
     # ── Callbacks for AgentExecutor (speak / fail-closed confirm) ──────────────
     async def speak(self, text: str) -> None:

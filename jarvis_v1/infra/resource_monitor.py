@@ -25,6 +25,10 @@ log = logging.getLogger("jarvis.resources")
 # False on the transition back to normal. Never called while state is unchanged.
 PressureCallback = Callable[[str, float, bool], Awaitable[None]]
 
+# Once in pressure, the metric must fall this fraction below the threshold to
+# clear (e.g. RAM threshold 93% → clears below ~88%).
+_CLEAR_MARGIN = 0.05
+
 
 class ResourceMonitor:
     def __init__(self, config: ResourceConfig):
@@ -69,9 +73,17 @@ class ResourceMonitor:
             )
 
     async def _check_edge(self, metric: str, value: float, threshold: float) -> None:
-        """Fire the pressure callback only on a state transition."""
-        now_over = value > threshold
+        """Fire the pressure callback only on a state transition.
+
+        Hysteresis: enter pressure above `threshold`, but only clear once the
+        value drops CLEAR_MARGIN below it. Without this, a metric hovering at
+        the threshold (RAM at 92.6-94.8% vs 93%) flapped the model 7b<->3b.
+        """
         was_over = self._in_pressure.get(metric, False)
+        if was_over:
+            now_over = value > threshold * (1.0 - _CLEAR_MARGIN)
+        else:
+            now_over = value > threshold
         if now_over == was_over:
             return  # no change — don't re-alert every poll tick
         self._in_pressure[metric] = now_over
