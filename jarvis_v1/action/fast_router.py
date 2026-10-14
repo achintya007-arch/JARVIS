@@ -119,7 +119,7 @@ class FastRouter:
     _YT_TAIL = re.compile(r"\s+(?:on|in|from|through|via)\s+youtube$", re.IGNORECASE)
 
     # Leading wake word that bleeds into a continuous "hey jarvis, <command>".
-    _WAKE_PREFIX = re.compile(r"^(?:hey\s+|ok\s+|okay\s+)?(?:jarvis|echo)\b[\s,]*", re.IGNORECASE)
+    _WAKE_PREFIX = re.compile(r"^(?:hey\s+|ok\s+|okay\s+)?jarvis\b[\s,]*", re.IGNORECASE)
 
     # ── Volume ────────────────────────────────────────────────────────────────
     _VOLUME_SET = re.compile(

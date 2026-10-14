@@ -2,7 +2,7 @@
 Voice rebuild — VoiceOrchestrator integration with fakes (no mic/model/audio).
 
 Covers: a full wake→listen→process→speak turn returning to IDLE, new speech
-while Echo is speaking (barge-in → cancel generation + playback → back to
+while JARVIS is speaking (barge-in → cancel generation + playback → back to
 LISTENING carrying the interrupting audio), cancellation of pending speech, and
 failure/fallback (wake unavailable; TTS synth returns None).
 """
@@ -206,7 +206,7 @@ def _frames(n):
 
 
 class TestWakeBargeIn:
-    """Default barge-in mode: only the wake word interrupts Echo, so Echo's own
+    """Default barge-in mode: only the wake word interrupts JARVIS, so JARVIS's own
     voice leaking from open speakers can't trigger a self-interrupt loop."""
 
     async def test_wake_word_interrupts(self):
@@ -216,7 +216,7 @@ class TestWakeBargeIn:
         assert result == []                       # interrupt, no look-back carried
 
     async def test_own_speech_without_wake_word_does_not_interrupt(self):
-        # Frames keep arriving (Echo talking into the mic) but no wake word.
+        # Frames keep arriving (JARVIS talking into the mic) but no wake word.
         orch = _orch(endpointer=FakeEndpointer([]), stt=FakeSTT(""), conv=FakeConv([]),
                      wake=CountingWake(fire_on=None))
         with pytest.raises(asyncio.TimeoutError):
@@ -262,7 +262,7 @@ class TestTranscriptHandling:
 
 
 class TestFollowUp:
-    """When Echo's reply ends with a question, it listens for the answer
+    """When JARVIS's reply ends with a question, it listens for the answer
     WITHOUT requiring the wake word again."""
 
     async def test_question_reply_listens_without_wake_word(self):

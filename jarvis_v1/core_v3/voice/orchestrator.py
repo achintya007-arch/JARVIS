@@ -33,7 +33,7 @@ _AFFIRMATIVE_RE = re.compile(
 )
 # A wake phrase that bled into the capture ("Hey Jarvis, open Chrome").
 _WAKE_PREFIX_RE = re.compile(
-    r"^\s*(?:(?:hey|hi|ok|okay)[\s,]+)?(?:jarvis|echo)\b[\s,.!?]*", re.IGNORECASE
+    r"^\s*(?:(?:hey|hi|ok|okay)[\s,]+)?jarvis\b[\s,.!?]*", re.IGNORECASE
 )
 # A bare "stop"-type utterance: end the turn quietly instead of asking the LLM.
 _STOP_ONLY_RE = re.compile(
@@ -112,7 +112,7 @@ class VoiceOrchestrator:
             return None
         self._wake.reset()
         q = self._mic.subscribe()
-        print('\n[Echo] Idle — say "hey jarvis"\n', flush=True)
+        print('\n[JARVIS] Idle — say "hey jarvis"\n', flush=True)
         # Instrumentation: every ~4s report frames seen + peak score, so if wake
         # never fires we can tell whether frames are arriving (mic/loop healthy)
         # and how close the score got (threshold tuning) vs. a dead stream.
@@ -141,22 +141,22 @@ class VoiceOrchestrator:
         """One wake-initiated interaction: listen → process → speak, looping back
         to LISTENING on barge-in, and to IDLE when the turn completes."""
         preroll: list | None = None
-        followup = False        # True while waiting for the answer to Echo's question
+        followup = False        # True while waiting for the answer to JARVIS's question
         while self._running:
             # LISTENING — reuse the live wake subscription for the FIRST capture
             # (no gap → no clipped command onset); fresh subscription afterward.
             self.state.transition(VoiceState.LISTENING)
             if followup:
-                # Cue that Echo is waiting for an answer. The cue finishes BEFORE
-                # we subscribe, so neither it nor the tail of Echo's reply is
+                # Cue that JARVIS is waiting for an answer. The cue finishes BEFORE
+                # we subscribe, so neither it nor the tail of JARVIS's reply is
                 # recorded as the user's answer.
                 if getattr(self._cfg, "follow_up_chime", True):
                     await self._chime()
                 else:
                     await asyncio.sleep(0.15)
-                print("[Echo] Listening for your reply...", flush=True)
+                print("[JARVIS] Listening for your reply...", flush=True)
             else:
-                print("[Echo] Listening...", flush=True)
+                print("[JARVIS] Listening...", flush=True)
             if initial_q is not None:
                 q, initial_q = initial_q, None
             else:
@@ -195,7 +195,7 @@ class VoiceOrchestrator:
             barge = await self._speak_response(command, followup=followup)
             if barge is None:
                 if self._should_follow_up():
-                    # Echo asked a question — wait for the answer without
+                    # JARVIS asked a question — wait for the answer without
                     # requiring the wake word again.
                     followup = True
                     continue
@@ -206,7 +206,7 @@ class VoiceOrchestrator:
 
     def _should_follow_up(self) -> bool:
         """Listen again without the wake word? "question" (default): only when
-        Echo's reply ended with a question. "always": after every reply.
+        JARVIS's reply ended with a question. "always": after every reply.
         "off": never."""
         mode = getattr(self._cfg, "follow_up", "question")
         if mode == "always":
@@ -267,7 +267,7 @@ class VoiceOrchestrator:
         if getattr(self._cfg, "barge_in_mode", "wake") == "wake":
             return await self._monitor_wake_barge_in(q)
         # "vad" mode: any sustained speech interrupts (reliable with headphones;
-        # on open speakers Echo's own voice can trigger it).
+        # on open speakers JARVIS's own voice can trigger it).
         while True:
             frames = await self._interruption.monitor(q)
             if self._confirming:
@@ -276,7 +276,7 @@ class VoiceOrchestrator:
             return frames
 
     async def _monitor_wake_barge_in(self, q: asyncio.Queue) -> list:
-        """Interrupt only when the wake word is spoken over Echo. Echo never says
+        """Interrupt only when the wake word is spoken over JARVIS. JARVIS never says
         "hey jarvis" itself, so its own voice leaking from open speakers into the
         mic can't self-trigger — which is what made "any speech" barge-in loop.
         Returns an empty look-back: the wake phrase isn't part of the command."""

@@ -1,8 +1,8 @@
 """
-Follow-up answers: a short reply to Echo's question ("yes") must reach the LLM.
+Follow-up answers: a short reply to JARVIS's question ("yes") must reach the LLM.
 
 Outside a follow-up, a bare "yes" is low-signal and ignored (as before). When
-it answers a question Echo just asked, ConversationEngine routes it to the LLM,
+it answers a question JARVIS just asked, ConversationEngine routes it to the LLM,
 whose context (the vault's rolling window) holds the question.
 """
 

@@ -86,7 +86,7 @@ def _is_hallucination(text: str) -> bool:
 
 
 # Short answers that overlap the phantom list ("okay", "yeah"). Kept only when
-# the caller says a reply is expected (Echo just asked a question), since the
+# the caller says a reply is expected (JARVIS just asked a question), since the
 # endpointer has then already confirmed real speech.
 _ANSWER_WORDS = frozenset({
     "yes", "yeah", "yep", "yup", "sure", "okay", "ok", "no", "nope",
@@ -409,7 +409,7 @@ class STTEngine:
         Runs Whisper in a thread to keep the event loop free.
 
         allow_answers: keep a bare "yes"/"okay"/"no" that the phantom filter
-        would otherwise drop — used when replying to a question from Echo.
+        would otherwise drop — used when replying to a question from JARVIS.
         """
         if len(audio) < self.fs * 0.3:
             return ""

@@ -1,5 +1,5 @@
 """
-InterruptionController — barge-in detection while Echo is speaking.
+InterruptionController — barge-in detection while JARVIS is speaking.
 
 Runs concurrently with playback, consuming its own mic subscription through
 Silero VAD. When it sees sustained speech (interrupt_speech_sec of frames above
@@ -8,7 +8,7 @@ the interrupting utterance can be carried straight into the next LISTENING
 capture as look-back (the user's words aren't lost).
 
 Open-speaker caveat: without acoustic echo cancellation the mic also hears
-Echo's own voice, which can self-trigger. The sustained-speech + higher
+JARVIS's own voice, which can self-trigger. The sustained-speech + higher
 threshold guard reduces this; headphones eliminate it. Tune via VoiceConfig
 (interrupt_speech_sec, interrupt_silero_threshold) or disable (allow_barge_in).
 """

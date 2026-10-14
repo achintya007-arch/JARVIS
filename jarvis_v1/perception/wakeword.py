@@ -5,8 +5,8 @@ Replaces the old tiny.en-Whisper-window approach: openWakeWord runs a small
 purpose-built model (~3 ms per 80 ms frame on CPU, onnxruntime backend), which
 is both far cheaper and far more reliable than transcribing rolling windows.
 
-The default model is the pretrained "hey_jarvis". Other names (e.g. "Echo")
-need a custom-trained openWakeWord model — point WakeConfig.model at its .onnx.
+The default model is the pretrained "hey_jarvis". A different wake phrase
+would need a custom-trained openWakeWord model — point WakeConfig.model at its .onnx.
 """
 
 from __future__ import annotations

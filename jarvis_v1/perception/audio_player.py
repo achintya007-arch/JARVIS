@@ -4,7 +4,7 @@ AudioPlayer — plays synthesized speech segments, cancellable on barge-in.
 A background task plays queued (sample_rate, samples) segments in order. The
 critical operation is interrupt(): it stops the current segment immediately
 (sd.stop() makes the in-thread sd.wait() return at once) and drops everything
-still queued — so when the user barges in, Echo goes silent right away.
+still queued — so when the user barges in, JARVIS goes silent right away.
 
 Playback is overlap-friendly: the orchestrator enqueues sentence N's audio
 while sentence N+1 is still being generated, so speech starts early.

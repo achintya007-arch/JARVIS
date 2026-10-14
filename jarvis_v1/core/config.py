@@ -110,7 +110,7 @@ class WakeConfig:
     enabled: bool = True
     model: str = "hey_jarvis"        # openWakeWord pretrained model name
     threshold: float = 0.4           # detection score [0,1]; lower = more sensitive
-    # "Echo"/other names need a custom-trained openWakeWord model; point this at
+    # A different wake phrase needs a custom-trained openWakeWord model; point this at
     # a local .onnx path to use one.
     inference_framework: str = "onnx"
 
@@ -125,18 +125,18 @@ class VoiceConfig:
     frame_ms: int = 80               # mic frame size (openWakeWord native = 80ms)
     chime_on_wake: bool = True
     # Follow-up mode: keep listening WITHOUT the wake word after a reply.
-    #   "question" — only when Echo's reply ends with a question (default)
+    #   "question" — only when JARVIS's reply ends with a question (default)
     #   "always"   — after every reply (more conversational, more false starts)
     #   "off"      — always require the wake word
     follow_up: str = "question"
     follow_up_timeout_sec: float = 6.0   # give up and return to idle if no answer
-    follow_up_chime: bool = True         # short cue that Echo is waiting for a reply
-    # Barge-in (interrupting Echo while it speaks):
-    #   "wake" — say "hey jarvis" over Echo to interrupt (default). Echo never
+    follow_up_chime: bool = True         # short cue that JARVIS is waiting for a reply
+    # Barge-in (interrupting JARVIS while it speaks):
+    #   "wake" — say "hey jarvis" over JARVIS to interrupt (default). JARVIS never
     #            says the wake word, so its own voice from open speakers can't
     #            self-trigger. Then say the new command, or "stop".
     #   "vad"  — ANY sustained speech interrupts. Most natural, but on open
-    #            speakers (no echo cancellation) the mic hears Echo itself and it
+    #            speakers (no echo cancellation) the mic hears JARVIS itself and it
     #            interrupts its own replies. Use with headphones.
     #   "off"  — no barge-in.
     barge_in_mode: str = "wake"

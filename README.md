@@ -108,7 +108,7 @@ separately-testable parts (`perception/microphone.py`, `wakeword.py`,
   cut off.
 - **Speaking:** Piper streams sentence-by-sentence; audio starts on the first
   sentence while the rest is still being generated.
-- **Barge-in:** while Echo is speaking the mic keeps listening — start talking
+- **Barge-in:** while JARVIS is speaking the mic keeps listening — start talking
   and playback stops immediately, generation is cancelled, and it re-listens.
   *Use headphones for the most reliable barge-in (open speakers can echo into
   the mic).* Tune or disable via `VoiceConfig`.

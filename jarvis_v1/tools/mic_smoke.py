@@ -6,7 +6,7 @@ turn, the live latencies that matter:
 
     wake → first audio       (say "hey jarvis …")
     end-of-speech → first audio
-    (barge-in: interrupt while Echo is speaking — playback should stop at once)
+    (barge-in: interrupt while JARVIS is speaking — playback should stop at once)
 
     python -m tools.mic_smoke      # or:  .\run.ps1 -MicSmoke
 

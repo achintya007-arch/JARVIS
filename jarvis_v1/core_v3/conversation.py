@@ -72,7 +72,7 @@ class ConversationEngine:
     async def respond(self, text: str, *, followup: bool = False) -> AsyncIterator[str]:
         """Yield spoken-response sentences for the utterance `text`. Cancellable.
 
-        followup: `text` answers a question Echo just asked ("Would you like me
+        followup: `text` answers a question JARVIS just asked ("Would you like me
         to…?" → "yes"). Short replies that would normally be ignored as
         low-signal go to the LLM, whose context holds the previous exchange.
         """
