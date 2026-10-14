@@ -76,7 +76,7 @@ class TestShellExecution:
         # directly outside the test loop). Retry once to absorb that OS-level
         # hiccup rather than let it flake the suite.
         ex = make_executor(shell_enabled=True, confirmation_required=False)
-        for attempt in range(2):
+        for _attempt in range(2):
             res = await run_tool(ex, "run_shell", {"command": "echo jarvis"})
             if "jarvis" in res["result"]["stdout"].lower():
                 return

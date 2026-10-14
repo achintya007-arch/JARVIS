@@ -4,6 +4,7 @@
 #   pip install -r requirements.txt
 #
 # For optional feature sets:
-#   pip install -e ".[vision]"   # YOLO object detection (heavy, pulls torch)
+#   pip install -e ".[voice]"    # V3 voice layer: Piper TTS + Silero VAD + openWakeWord
+#   pip install -e ".[data]"     # build the optional FineWeb web-knowledge index
 #   pip install -e ".[dev]"      # pytest, ruff, mypy
 -e .

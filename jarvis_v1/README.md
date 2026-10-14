@@ -51,7 +51,8 @@ Two orchestrators coexist; shared primitives live in `core_common/`:
 | `python -m core_v3` | `core_v3/brain.py` | **Active default** (vault memory) |
 | `python main.py`    | `core_v2/brain.py` | Stable (SQLite + ChromaDB)       |
 
-The original V1 (`legacy/assistant.py`) is retained for reference only.
+The original V1 orchestrator has been retired (preserved in git history, tag
+`pre-retire-old-modules`).
 
 ## Security posture
 
@@ -84,7 +85,7 @@ See `action/agent_executor.py` and `tests/test_security.py`.
 ```bash
 pip install -r requirements.txt        # core dependencies (pinned)
 # optional feature sets:
-pip install -e ".[vision]"             # YOLO object detection (heavy)
+pip install -e ".[voice]"              # V3 voice: Piper TTS + Silero VAD + openWakeWord
 pip install -e ".[dev]"                # pytest, ruff, mypy
 
 python -m core_v3                      # start V3 (vault brain, wake mode) — default
@@ -125,15 +126,17 @@ CI (`.github/workflows/ci.yml`) runs these on Python 3.10 and 3.11.
 ## Project layout
 
 ```
-perception/   STT, TTS, hotword detection
-cognition/    LLM client, decision engine, agent state, memory, goals, agent-core loop
+perception/    mic, wake word, endpointer, STT, TTS, audio player; hotword (V2)
+cognition/     LLM client, decision engine, agent state, memory, goals, agent-core loop
 action/        FastRouter, AgentExecutor (tools), desktop control
 infra/         resource monitor
 core/          config
+core_common/   shared EventBus, events, SpeakingGuard
 core_v2/       V2 event-driven orchestrator (stable)
-core_v3/       V3 vault-centric orchestrator (in development)
+core_v3/       V3 vault-centric orchestrator (active default) + voice state machine
 memory/        V3 vault memory layer
-legacy/        V1 orchestrator (reference only)
+data/          offline FineWeb web-index builder
+tools/         diagnostics (wake_check, mic_smoke, mic_check, voice_test)
 tests/         pytest suite
 ```
 

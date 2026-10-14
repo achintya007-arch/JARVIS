@@ -49,9 +49,9 @@ mypy .                  # type check (advisory)
   shell allowlist, filesystem sandbox, or confirmation flow must come with a
   corresponding test in `tests/test_security.py`. These are fail-closed
   boundaries — keep them that way.
-- **Architecture:** prefer adding to V3 (`core_v3/`). Shared primitives go in
-  `core_common/` so V2 and V3 stay decoupled. `legacy/` is frozen — don't build
-  on it.
+- **Architecture:** build new features in V3 (`core_v3/`). V2 (`core_v2/`,
+  `main.py`) is kept as the stable fallback — fix bugs there, but don't grow it.
+  Shared primitives go in `core_common/` so V2 and V3 stay decoupled.
 - **Commits:** present-tense, explain *why* in the body when it isn't obvious.
 
 ## Project layout

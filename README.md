@@ -23,8 +23,9 @@ you have `cd`'d into that directory.
 
 - **Voice or text conversation** with a local LLM, streamed sentence-by-sentence
   into TTS so JARVIS starts speaking before the full reply is generated.
-- **Wake-word voice loop** — say *"Jarvis"*, hear a chime, then speak. A single
-  microphone owner, half-duplex turn-taking, and barge-in (interrupt mid-reply).
+- **Wake-word voice loop** — say *"hey jarvis"*, hear a chime, then speak. A
+  single microphone owner, barge-in (interrupt mid-reply), and follow-up mode
+  (answer JARVIS's questions without repeating the wake word).
 - **Deterministic fast-path routing** (`FastRouter`) for common commands — time,
   weather, timers, volume, launching apps/URLs — with zero LLM latency.
 - **Agentic tool use** — the LLM calls tools (system info, files, shell, web
@@ -57,13 +58,15 @@ pipeline, and decision pipeline — is in
 **[`jarvis_v1/docs/JARVIS_Design_Document_v0.1.md`](jarvis_v1/docs/JARVIS_Design_Document_v0.1.md)**
 (a rendered [PDF](jarvis_v1/docs/JARVIS_Design_Document_v0.1.pdf) is alongside it).
 
-### Three orchestrator generations
+### Two orchestrators
 
 | Launch                        | Orchestrator        | State                                   |
 |-------------------------------|---------------------|-----------------------------------------|
 | `.\run.ps1` / `python -m core_v3` | `core_v3/brain.py`  | **Active default** — vault memory, wake voice |
 | `.\run.ps1 -V2` / `python main.py` | `core_v2/brain.py`  | Stable — SQLite + ChromaDB memory       |
-| `legacy/assistant.py`         | V1                  | Retained for reference only             |
+
+The original V1 orchestrator has been retired; it is preserved in git history
+(tag `pre-retire-old-modules`).
 
 Shared primitives (`EventBus`, event types, `SpeakingGuard`) live in
 `core_common/` so V2 and V3 don't depend on each other.
@@ -89,7 +92,6 @@ pip install -r requirements.txt     # pinned core dependencies
 
 # optional feature sets:
 pip install -e ".[voice]"           # full V3 voice layer: Piper TTS + Silero VAD + openWakeWord (recommended)
-pip install -e ".[vision]"          # YOLO object detection (heavy — pulls torch)
 pip install -e ".[dev]"             # pytest, ruff, mypy
 # (or install the voice pieces individually: .[piper] .[vad] .[wakeword])
 ```
@@ -108,10 +110,14 @@ separately-testable parts (`perception/microphone.py`, `wakeword.py`,
   cut off.
 - **Speaking:** Piper streams sentence-by-sentence; audio starts on the first
   sentence while the rest is still being generated.
-- **Barge-in:** while JARVIS is speaking the mic keeps listening — start talking
-  and playback stops immediately, generation is cancelled, and it re-listens.
-  *Use headphones for the most reliable barge-in (open speakers can echo into
-  the mic).* Tune or disable via `VoiceConfig`.
+- **Barge-in:** while JARVIS is speaking, say *"hey jarvis"* — playback stops
+  immediately, generation is cancelled, and it listens for your new command (or
+  "stop"). Only the wake word interrupts, so JARVIS's own voice leaking from open
+  speakers can't cut itself off. With headphones you can set
+  `VoiceConfig.barge_in_mode = "vad"` so any speech interrupts.
+- **Follow-up mode:** when JARVIS ends a reply with a question, it keeps listening
+  for ~6 s without the wake word, so you can just answer "yes" or "no".
+  `VoiceConfig.follow_up`: `"question"` (default), `"always"`, or `"off"`.
 
 Validate it live (prints wake→first-audio and end-of-speech→first-audio latencies):
 
@@ -138,14 +144,18 @@ cloud backend, set `tts.engine: "edge"`.
 
 ### Launch (Windows, recommended)
 
-`run.ps1` runs preflight checks (Python, Ollama reachability, required models)
-before starting:
+`run.ps1` uses the project's `venv` interpreter and runs preflight checks
+(Python, voice dependencies, Ollama — started automatically if installed but not
+running — and required models) before starting:
 
 ```powershell
 .\run.ps1            # V3 vault brain, wake-word voice  (default)
 .\run.ps1 -Text      # V3, keyboard input (no microphone needed)
 .\run.ps1 -V2        # V2 stable brain
 .\run.ps1 -Test      # run the test suite and exit
+.\run.ps1 -WakeCheck # live wake-word score meter (tune the threshold)
+.\run.ps1 -MicSmoke  # V3 end-to-end voice test with latency readout
+.\run.ps1 -MicCheck  # V2 speech-capture diagnostic
 .\run.ps1 -VoiceTest # A/B test TTS voice / rate / pitch
 ```
 
@@ -158,7 +168,8 @@ python main.py             # V2 stable brain
 ```
 
 Set the input mode without editing config via the `JARVIS_MODE` environment
-variable: `wake` (say "Jarvis"), `text` (keyboard), or `voice` (always-listening).
+variable: `wake` (say "hey jarvis"), `text` (keyboard), or `voice` (V2
+always-listening).
 
 ## Configuration
 
@@ -180,7 +191,7 @@ stt:
 
 tts:
   engine: "piper"       # "piper" (local, default) or "edge" (cloud fallback)
-  voice: "en_US-ryan-high"   # Piper model name in voices/ (or an en-US-* edge voice)
+  voice: "en_US-lessac-medium"   # Piper model in voices/ (en_US-ryan-high: richer, slower)
   rate: "-4%"           # prosody; slightly slower reads as composed
 
 agent:
@@ -197,16 +208,15 @@ mode: "wake"            # wake | text | voice
 Speech capture uses a neural VAD ([Silero](https://github.com/snakers4/silero-vad),
 the `vad` extra) for robust speech endpointing — it needs no per-mic threshold
 tuning. Without the `[vad]` extra it falls back to an adaptive energy-based VAD
-(`vad_backend: "rms"`), which adapts its threshold to your room. If capture cuts
-you off, misses quiet speech, or mishears, run the diagnostic to see exactly
-what it hears and calibrate:
+(`vad_backend: "rms"`), which adapts its threshold to your room.
 
-```powershell
-.\run.ps1 -MicCheck        # or:  python -m tools.mic_check
-```
-
-It prints your ambient noise floor, the adaptive onset threshold, and — for each
-test utterance — the stop reason, duration, and Whisper confidence. Then adjust
+- **"hey jarvis" not triggering (or only when you raise your voice):** run
+  `.\run.ps1 -WakeCheck` and lower `WakeConfig.threshold` toward the peak scores
+  you see when speaking normally.
+- **V3 voice latency / barge-in:** `.\run.ps1 -MicSmoke`.
+- **V2 capture tuning:** `.\run.ps1 -MicCheck` prints your ambient noise floor,
+  the adaptive onset threshold, and — per test utterance — the stop reason,
+  duration, and Whisper confidence. Then adjust
 `STTConfig` in [`core/config.py`](jarvis_v1/core/config.py) (or `config.yaml`):
 `end_silence_sec` (raise if it truncates mid-sentence), `silence_threshold`
 (lower if quiet speech is missed), `avg_logprob_min` (lower if real speech is
@@ -249,8 +259,8 @@ are skipped via `pytest.importorskip`):
 
 ```bash
 cd jarvis_v1
-pytest tests/ -v          # 118 tests
-ruff check .              # lint (CI-blocking)
+pytest tests/ -v          # 188 tests
+ruff check .              # lint incl. tests/ (CI-blocking)
 ```
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the suite on
@@ -266,8 +276,10 @@ jarvis_v1/
 ├── core/              # config (dataclasses + config.yaml loader)
 ├── core_common/       # shared primitives: EventBus, events, SpeakingGuard
 ├── core_v2/           # V2 orchestrator (stable): brain, adapters, bus
-├── core_v3/           # V3 orchestrator (active): vault brain, wake voice
-├── perception/        # stt, tts, hotword, audio cues, vision
+├── core_v3/           # V3 orchestrator (active): composition root,
+│   └── voice/         #   conversation engine, voice state machine
+├── perception/        # mic, wake word, endpointer, stt, tts, audio player,
+│                      #   cues; hotword (V2)
 ├── cognition/         # llm_client, decision_engine, agent_state, goals,
 │   └── agent_core/    #   context_manager, memory_store; tool-calling loop
 ├── action/            # fast_router, agent_executor, obsidian_tools
@@ -275,9 +287,8 @@ jarvis_v1/
 ├── infra/             # resource monitor (VRAM/RAM watchdog)
 ├── memory/            # V3 vault: vault, indexer, embeddings, web_rag
 ├── data/              # offline FineWeb index builder
-├── tests/             # pytest suite (118 tests)
-├── tools/             # voice A/B tester
-├── legacy/            # V1 orchestrator (reference only)
+├── tests/             # pytest suite (188 tests)
+├── tools/             # diagnostics: wake_check, mic_smoke, mic_check, voice_test
 └── docs/              # engineering design document (md + pdf)
 ```
 

@@ -8,8 +8,8 @@ them here would give distinct types and silently break cross-module subscription
 
 V3 adds one event of its own: VaultEvent.
 
-(At Phase E cutover, when core_v2 moves to legacy/, these shared event classes
-should be relocated to a neutral module and both re-export from there.)
+(The shared event classes live in core_common/events.py; V2 and V3 both
+re-export them from there.)
 """
 
 from __future__ import annotations

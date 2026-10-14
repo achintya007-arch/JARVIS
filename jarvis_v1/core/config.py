@@ -256,10 +256,10 @@ class Config:
     log_level: str = "INFO"
     # NEW SYSTEM FLAGS
     voice_enabled: bool = True
-    # "wake"    — say "jarvis" to talk; mic muted while JARVIS speaks (default, robust)
-    # "voice"   — always-listening (legacy; only sane with headphones)
+    # "wake"    — say "hey jarvis" to talk (default; V3 voice state machine)
     # "text"    — keyboard input
-    # "hotword" — legacy continuous hotword path
+    # "voice"   — V2 only: always-listening (only sane with headphones)
+    # "hotword" — V2 only: continuous tiny.en hotword path
     mode: str = "wake"
 
     @classmethod

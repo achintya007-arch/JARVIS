@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jarvis"
 version = "0.3.0"
-description = "JARVIS — a local, voice-driven AI assistant (Ollama LLM, faster-whisper STT, edge-tts TTS, Obsidian-vault memory)."
+description = "JARVIS — a local, voice-driven AI assistant (Ollama LLM, faster-whisper STT, Piper TTS, Obsidian-vault memory)."
 requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "MIT" }
@@ -31,17 +31,11 @@ dependencies = [
     "pyperclip==1.11.0",
     "pycaw==20251023",
     "comtypes==1.4.16",
+    "pillow==12.3.0",          # screen_tool imports PIL directly (screenshots)
     "nvidia-ml-py3==7.352.0",
 ]
 
 [project.optional-dependencies]
-# Vision (YOLO object detection) is heavy (pulls torch) and optional — the
-# assistant runs without it. Install with:  pip install -e ".[vision]"
-vision = [
-    "ultralytics==8.4.33",
-    "opencv-python==4.13.0.92",
-    "pillow==12.1.1",
-]
 # Offline FineWeb web-knowledge pipeline (Phase D). Only needed to BUILD the
 # index; the runtime queries the prebuilt Chroma index without `datasets`.
 data = [
@@ -91,9 +85,6 @@ include = ["core*", "core_v2*", "core_v3*", "cognition*", "action*", "perception
 [tool.ruff]
 line-length = 110
 target-version = "py310"
-# legacy/ is reference-only (V1); the root-level test_*.py are deprecated V2
-# ad-hoc scripts (the real suite is in tests/). Not worth linting.
-extend-exclude = ["legacy", "test_*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]

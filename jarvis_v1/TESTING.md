@@ -101,7 +101,8 @@ notes, goals, volume) — but LLM replies and semantic recall are disabled.
 
 ### Next up
 - [ ] **Phase G — coding partner** (the big "code my stuff" capability)
-- [ ] Phase E — cutover: dogfood V3 for a few days, then move `core_v2/` to `legacy/`
+- [x] Phase E — consolidation: V1 (`legacy/`) and dead code retired; V2 kept as the
+      stable fallback alongside V3 (snapshot tag `pre-retire-old-modules`)
 - [ ] Phase H — benchmarks (`bench_stt`, `bench_routing`, `bench_e2e`) + demo video
 
 ### Small follow-ups

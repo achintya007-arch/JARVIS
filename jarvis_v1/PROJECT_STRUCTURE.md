@@ -49,13 +49,12 @@ jarvis_v1/
 │   ├── microphone.py      # MicrophoneInput — single mic owner, async fan-out
 │   ├── wakeword.py        # WakeWordDetector — openWakeWord "hey_jarvis" (V3)
 │   ├── endpointer.py      # EndpointDetector — Silero VAD onset/endpoint (V3)
-│   ├── stt.py             # STTEngine — faster-whisper transcription (+ legacy
-│   │                      #   mic/VAD capture still used by V2/legacy)
+│   ├── stt.py             # STTEngine — faster-whisper transcription (V3 uses
+│   │                      #   transcribe(); the mic/VAD capture serves V2)
 │   ├── tts.py             # TTSEngine — Piper/edge synthesis (+ V2 queue/speak)
 │   ├── audio_player.py    # AudioPlayer — cancellable playback + interrupt() (V3)
-│   ├── hotword.py         # tiny.en wake (V2/legacy only; V3 uses wakeword.py)
-│   ├── cues.py            # Audio cues (wake chime, etc.)
-│   └── vision.py          # Optional YOLO object detection ([vision] extra)
+│   ├── hotword.py         # tiny.en wake (V2 only; V3 uses wakeword.py)
+│   └── cues.py            # Audio cues (wake chime, etc.)
 │
 ├── cognition/
 │   ├── llm_client.py       # Ollama streaming client; sentence_stream() for TTS;
@@ -95,24 +94,24 @@ jarvis_v1/
 │   ├── build_web_index.py  # Builds the FineWeb web-knowledge index
 │   └── fineweb_pipeline.py # FineWeb-Edu download + content filtering
 │
-├── tests/                  # pytest suite — 118 tests, no GPU/Ollama needed
+├── tests/                  # pytest suite — 188 tests, no GPU/Ollama needed
 │   ├── conftest.py
 │   ├── test_security.py        # shell allowlist / sandbox / confirmation
-│   ├── test_fast_router.py
-│   ├── test_agent_state.py
-│   ├── test_vault.py / test_vault_goals.py
-│   ├── test_wake_matching.py / test_wake_mode.py
-│   ├── test_stt_gating.py
-│   ├── test_resource_alerts.py
+│   ├── test_fast_router.py / test_hot_path.py
+│   ├── test_agent_state.py / test_resource_alerts.py
+│   ├── test_vault.py / test_vault_goals.py / test_obsidian_tools.py
+│   ├── test_voice_*.py         # V3 voice: endpoint, player, state, orchestrator
+│   ├── test_conversation_followup.py
+│   ├── test_stt_gating.py / test_stt_vad.py / test_tts_engine.py
+│   ├── test_wake_matching.py   # V2 hotword matcher
 │   ├── test_web_rag.py / test_fineweb_pipeline.py
-│   ├── test_obsidian_tools.py
 │   └── test_phase_f.py
 │
-├── tools/
-│   └── voice_test.py       # TTS voice/rate/pitch A/B tester
-│
-├── legacy/                 # V1 orchestrator — reference only, not linted/run
-│   └── assistant.py
+├── tools/                  # Diagnostics (launched via run.ps1 flags)
+│   ├── wake_check.py       # -WakeCheck: live wake-word score meter
+│   ├── mic_smoke.py        # -MicSmoke: V3 end-to-end voice + latency
+│   ├── mic_check.py        # -MicCheck: V2 speech-capture diagnostic
+│   └── voice_test.py       # -VoiceTest: TTS voice/rate/pitch A/B tester
 │
 └── docs/
     ├── JARVIS_Design_Document_v0.1.md
