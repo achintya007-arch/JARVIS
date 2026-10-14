@@ -85,6 +85,18 @@ def _is_hallucination(text: str) -> bool:
     return normalized in _HALLUCINATION_PHRASES
 
 
+# Short answers that overlap the phantom list ("okay", "yeah"). Kept only when
+# the caller says a reply is expected (Echo just asked a question), since the
+# endpointer has then already confirmed real speech.
+_ANSWER_WORDS = frozenset({
+    "yes", "yeah", "yep", "yup", "sure", "okay", "ok", "no", "nope",
+})
+
+
+def _is_answer(text: str) -> bool:
+    return text.lower().strip(" .,!?-—\"'") in _ANSWER_WORDS
+
+
 def _vad_collect(
     next_chunk: Callable[[], np.ndarray | None],
     *,
@@ -391,10 +403,13 @@ class STTEngine:
 
     # ── Transcription ──────────────────────────────────────────────────────────
 
-    async def transcribe(self, audio: np.ndarray) -> str:
+    async def transcribe(self, audio: np.ndarray, *, allow_answers: bool = False) -> str:
         """
         Transcribe audio array. Returns empty string for near-silence.
         Runs Whisper in a thread to keep the event loop free.
+
+        allow_answers: keep a bare "yes"/"okay"/"no" that the phantom filter
+        would otherwise drop — used when replying to a question from Echo.
         """
         if len(audio) < self.fs * 0.3:
             return ""
@@ -425,7 +440,7 @@ class STTEngine:
                 kept.append(seg.text)
 
             text = "".join(kept).strip()
-            if text and _is_hallucination(text):
+            if text and _is_hallucination(text) and not (allow_answers and _is_answer(text)):
                 log.debug("STT drop (hallucination): %r", text)
                 return ""
             return text

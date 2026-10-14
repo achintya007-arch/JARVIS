@@ -135,6 +135,7 @@ class EndpointDetector:
             return getattr(stt_config, a, d) if stt_config else d
 
         fps = 1000.0 / frame_ms
+        self._fps = fps
         self._end_silence_frames   = max(1, round(_c("end_silence_sec", 1.3) * fps))
         self._max_frames           = max(1, round(_c("max_utterance_sec", 15.0) * fps))
         self._onset_timeout_frames = max(1, round(_c("onset_timeout_sec", 7.0) * fps))
@@ -153,14 +154,18 @@ class EndpointDetector:
                 self._backend = "rms"
                 log.warning("Silero unavailable (%s) — endpointer falling back to RMS", e)
 
-    def _new_sm(self) -> EndpointSM:
+    def _new_sm(self, onset_timeout_sec: float | None = None) -> EndpointSM:
         threshold = self._silero_threshold if self._silero is not None else self._rms_threshold
+        onset_timeout = (
+            max(1, round(onset_timeout_sec * self._fps))
+            if onset_timeout_sec is not None else self._onset_timeout_frames
+        )
         return EndpointSM(
             threshold            = threshold,
             end_silence_frames   = self._end_silence_frames,
             max_frames           = self._max_frames,
             pre_frames           = self._pre_frames,
-            onset_timeout_frames = self._onset_timeout_frames,
+            onset_timeout_frames = onset_timeout,
             min_speech_frames    = self._min_speech_frames,
         )
 
@@ -169,12 +174,17 @@ class EndpointDetector:
             return self._silero.prob(frame)
         return _rms(frame)
 
-    async def capture(self, frame_q: asyncio.Queue, *, preroll: list | None = None) -> tuple[np.ndarray | None, str]:
+    async def capture(
+        self, frame_q: asyncio.Queue, *, preroll: list | None = None,
+        onset_timeout_sec: float | None = None,
+    ) -> tuple[np.ndarray | None, str]:
         """Capture one utterance from a mic frame queue. `preroll` seeds the
-        look-back (frames buffered before LISTENING began). Returns (audio, reason)."""
+        look-back (frames buffered before LISTENING began); `onset_timeout_sec`
+        overrides how long to wait for speech to start (shorter for follow-up
+        replies). Returns (audio, reason)."""
         if self._silero is not None:
             self._silero.reset()
-        sm = self._new_sm()
+        sm = self._new_sm(onset_timeout_sec)
         for f in (preroll or []):
             r = sm.feed(self._score(f), f)
             if r:

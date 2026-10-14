@@ -148,6 +148,7 @@ class Brain:
 
     async def _text_loop(self) -> None:
         print("JARVIS V3 (text mode). Type a message, Ctrl+C to exit.\n", flush=True)
+        asked_question = False
         while not self._stopped:
             try:
                 text = await asyncio.to_thread(input, "You: ")
@@ -155,8 +156,13 @@ class Brain:
                 break
             if not text.strip():
                 continue
-            async for sentence in self._conversation.respond(text):
+            last = ""
+            # If Echo's previous reply was a question, a short answer ("yes")
+            # is a reply to it, not low-signal noise.
+            async for sentence in self._conversation.respond(text, followup=asked_question):
+                last = sentence
                 print(f"Echo: {sentence}", flush=True)
+            asked_question = last.rstrip().endswith("?")
 
     async def stop(self) -> None:
         if self._stopped:

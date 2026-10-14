@@ -69,8 +69,13 @@ class ConversationEngine:
         screen_on = getattr(getattr(config, "agent", None), "screen_enabled", True)
         self._tools = build_tool_schemas(screen_enabled=screen_on)
 
-    async def respond(self, text: str) -> AsyncIterator[str]:
-        """Yield spoken-response sentences for the utterance `text`. Cancellable."""
+    async def respond(self, text: str, *, followup: bool = False) -> AsyncIterator[str]:
+        """Yield spoken-response sentences for the utterance `text`. Cancellable.
+
+        followup: `text` answers a question Echo just asked ("Would you like me
+        to…?" → "yes"). Short replies that would normally be ignored as
+        low-signal go to the LLM, whose context holds the previous exchange.
+        """
         full: list[str] = []
         try:
             # 1. Goals (single synchronous owner — create/complete short-circuit)
@@ -87,6 +92,8 @@ class ConversationEngine:
 
             # 3. Decide (reflex/rule need no messages; build only for the LLM path)
             decision = await self._decision.decide(text=text, state=state, memories=[], messages=[])
+            if followup and decision.action_type == "ignore":
+                decision = Decision(action_type="llm", reason="llm:followup_answer")
             messages: list[dict] = []
             if decision.action_type == "llm":
                 messages = await self._vault.build_messages(text, intent=state.conversation_intent)

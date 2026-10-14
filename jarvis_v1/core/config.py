@@ -124,6 +124,13 @@ class VoiceConfig:
     SPEAKING/INTERRUPTED). Endpoint/VAD tunables live in STTConfig."""
     frame_ms: int = 80               # mic frame size (openWakeWord native = 80ms)
     chime_on_wake: bool = True
+    # Follow-up mode: keep listening WITHOUT the wake word after a reply.
+    #   "question" — only when Echo's reply ends with a question (default)
+    #   "always"   — after every reply (more conversational, more false starts)
+    #   "off"      — always require the wake word
+    follow_up: str = "question"
+    follow_up_timeout_sec: float = 6.0   # give up and return to idle if no answer
+    follow_up_chime: bool = True         # short cue that Echo is waiting for a reply
     # Barge-in (interrupting Echo while it speaks):
     #   "wake" — say "hey jarvis" over Echo to interrupt (default). Echo never
     #            says the wake word, so its own voice from open speakers can't

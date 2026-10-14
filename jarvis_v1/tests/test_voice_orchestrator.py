@@ -26,25 +26,37 @@ class FakeMic:
 
 
 class FakeEndpointer:
-    def __init__(self, results): self.results = list(results); self.prerolls = []
-    async def capture(self, q, preroll=None):
+    def __init__(self, results):
+        self.results = list(results); self.prerolls = []; self.timeouts = []
+    async def capture(self, q, preroll=None, onset_timeout_sec=None):
         self.prerolls.append(preroll)
+        self.timeouts.append(onset_timeout_sec)
         return self.results.pop(0)
 
 
 class FakeSTT:
-    def __init__(self, text): self._text = text
-    async def transcribe(self, audio): return self._text
+    """Returns `text` for every call, or successive items if given a list."""
+    def __init__(self, text):
+        self._texts = list(text) if isinstance(text, list) else None
+        self._text = text; self.allow_answers = []
+    async def transcribe(self, audio, allow_answers=False):
+        self.allow_answers.append(allow_answers)
+        return self._texts.pop(0) if self._texts is not None else self._text
 
 
 class FakeConv:
-    def __init__(self, sentences, delay=0.0):
-        self.sentences, self.delay = sentences, delay
+    """`sentences` is one reply used every turn, or a list of replies (one per
+    turn) when `per_turn=True`."""
+    def __init__(self, sentences, delay=0.0, per_turn=False):
+        self.sentences, self.delay, self.per_turn = sentences, delay, per_turn
         self.text = None; self.cancelled = False
-    async def respond(self, text):
+        self.texts = []; self.followups = []
+    async def respond(self, text, followup=False):
         self.text = text
+        self.texts.append(text); self.followups.append(followup)
+        reply = self.sentences.pop(0) if self.per_turn else self.sentences
         try:
-            for s in self.sentences:
+            for s in reply:
                 if self.delay:
                     await asyncio.sleep(self.delay)
                 yield s
@@ -94,9 +106,11 @@ class CountingWake:
 
 
 def _orch(*, endpointer, stt, conv, tts=None, player=None, interruption=None, wake=None,
-          barge_mode="wake"):
+          barge_mode="wake", follow_up="question"):
     cfg = VoiceConfig()
     cfg.barge_in_mode = barge_mode
+    cfg.follow_up = follow_up
+    cfg.follow_up_chime = False         # no real audio in tests
     return VoiceOrchestrator(
         mic=FakeMic(), wake=wake or FakeWake(), endpointer=endpointer,
         stt=stt, tts=tts or FakeTTS(), player=player or FakePlayer(),
@@ -245,3 +259,52 @@ class TestTranscriptHandling:
         orch._running = True
         await asyncio.wait_for(orch._conversation_turn(), timeout=3.0)
         assert conv.text is None and player.enqueued == []
+
+
+class TestFollowUp:
+    """When Echo's reply ends with a question, it listens for the answer
+    WITHOUT requiring the wake word again."""
+
+    async def test_question_reply_listens_without_wake_word(self):
+        audio = np.zeros(16000, dtype=np.float32)
+        ep = FakeEndpointer([(audio, "endpoint"), (audio, "endpoint")])
+        stt = FakeSTT(["set up python for me", "yes"])
+        conv = FakeConv([["Would you like me to set up an environment, Sir?"],
+                         ["Setting it up now, Sir."]], per_turn=True)
+        orch = _orch(endpointer=ep, stt=stt, conv=conv)
+        orch._running = True
+
+        await asyncio.wait_for(orch._conversation_turn(), timeout=3.0)
+
+        assert conv.texts == ["set up python for me", "yes"]   # "yes" reached cognition
+        assert conv.followups == [False, True]                 # flagged as an answer
+        assert stt.allow_answers == [False, True]              # short answer not filtered
+        assert ep.timeouts == [None, 6.0]                      # shorter reply window
+
+    async def test_no_answer_returns_to_idle(self):
+        audio = np.zeros(16000, dtype=np.float32)
+        ep = FakeEndpointer([(audio, "endpoint"), (None, "onset_timeout")])
+        conv = FakeConv(["Would you like that, Sir?"])
+        orch = _orch(endpointer=ep, stt=FakeSTT("do the thing"), conv=conv)
+        orch._running = True
+        await asyncio.wait_for(orch._conversation_turn(), timeout=3.0)
+        assert len(conv.texts) == 1                            # silence → back to idle
+
+    async def test_statement_reply_needs_wake_word_again(self):
+        # Only one capture is available: listening again would raise.
+        audio = np.zeros(16000, dtype=np.float32)
+        ep = FakeEndpointer([(audio, "endpoint")])
+        orch = _orch(endpointer=ep, stt=FakeSTT("open chrome"),
+                     conv=FakeConv(["Opening Chrome, Sir."]))
+        orch._running = True
+        await asyncio.wait_for(orch._conversation_turn(), timeout=3.0)
+        assert len(ep.timeouts) == 1
+
+    async def test_follow_up_off_ignores_questions(self):
+        audio = np.zeros(16000, dtype=np.float32)
+        ep = FakeEndpointer([(audio, "endpoint")])
+        orch = _orch(endpointer=ep, stt=FakeSTT("set up python"),
+                     conv=FakeConv(["Shall I proceed?"]), follow_up="off")
+        orch._running = True
+        await asyncio.wait_for(orch._conversation_turn(), timeout=3.0)
+        assert len(ep.timeouts) == 1

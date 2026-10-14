@@ -66,6 +66,7 @@ class VoiceOrchestrator:
         self.state = VoiceStateManager()
         self._running = False
         self._confirming = False          # suppresses barge-in during confirmation
+        self._last_sentence = ""          # last spoken sentence (follow-up detection)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
     async def start(self) -> None:
@@ -140,27 +141,41 @@ class VoiceOrchestrator:
         """One wake-initiated interaction: listen → process → speak, looping back
         to LISTENING on barge-in, and to IDLE when the turn completes."""
         preroll: list | None = None
+        followup = False        # True while waiting for the answer to Echo's question
         while self._running:
             # LISTENING — reuse the live wake subscription for the FIRST capture
             # (no gap → no clipped command onset); fresh subscription afterward.
             self.state.transition(VoiceState.LISTENING)
-            print("[Echo] Listening...", flush=True)
+            if followup:
+                # Cue that Echo is waiting for an answer. The cue finishes BEFORE
+                # we subscribe, so neither it nor the tail of Echo's reply is
+                # recorded as the user's answer.
+                if getattr(self._cfg, "follow_up_chime", True):
+                    await self._chime()
+                else:
+                    await asyncio.sleep(0.15)
+                print("[Echo] Listening for your reply...", flush=True)
+            else:
+                print("[Echo] Listening...", flush=True)
             if initial_q is not None:
                 q, initial_q = initial_q, None
             else:
                 q = self._mic.subscribe()
+            timeout = getattr(self._cfg, "follow_up_timeout_sec", 6.0) if followup else None
             try:
-                audio, reason = await self._endpointer.capture(q, preroll=preroll)
+                audio, reason = await self._endpointer.capture(
+                    q, preroll=preroll, onset_timeout_sec=timeout,
+                )
             finally:
                 self._mic.unsubscribe(q)
             preroll = None
             if audio is None:
-                log.info("no speech captured (%s) → idle", reason)
+                log.info("no %s captured (%s) → idle", "reply" if followup else "speech", reason)
                 return
 
             # PROCESSING
             self.state.transition(VoiceState.PROCESSING)
-            text = await self._stt.transcribe(audio)
+            text = await self._stt.transcribe(audio, allow_answers=followup)
             if not text.strip():
                 log.info("empty transcript → idle")
                 return
@@ -177,17 +192,35 @@ class VoiceOrchestrator:
                 return
 
             # SPEAKING (+ barge-in). Returns interrupting look-back, or None.
-            barge = await self._speak_response(command)
+            barge = await self._speak_response(command, followup=followup)
             if barge is None:
+                if self._should_follow_up():
+                    # Echo asked a question — wait for the answer without
+                    # requiring the wake word again.
+                    followup = True
+                    continue
                 return                      # turn complete → IDLE
             self.state.transition(VoiceState.INTERRUPTED)
+            followup = False
             preroll = barge                 # carry interrupting speech into LISTENING
 
-    async def _speak_response(self, text: str) -> list | None:
+    def _should_follow_up(self) -> bool:
+        """Listen again without the wake word? "question" (default): only when
+        Echo's reply ended with a question. "always": after every reply.
+        "off": never."""
+        mode = getattr(self._cfg, "follow_up", "question")
+        if mode == "always":
+            return True
+        if mode == "question":
+            return self._last_sentence.rstrip().endswith("?")
+        return False
+
+    async def _speak_response(self, text: str, *, followup: bool = False) -> list | None:
         """Stream the response to TTS while monitoring for barge-in.
         Returns the interrupting frames if the user barged in, else None."""
         self.state.transition(VoiceState.SPEAKING)
-        produce = asyncio.create_task(self._produce_speech(text))
+        self._last_sentence = ""
+        produce = asyncio.create_task(self._produce_speech(text, followup=followup))
         playback = asyncio.create_task(self._await_playback(produce))
 
         monitor = None
@@ -217,9 +250,10 @@ class VoiceOrchestrator:
             if monitor_q is not None:
                 self._mic.unsubscribe(monitor_q)
 
-    async def _produce_speech(self, text: str) -> None:
+    async def _produce_speech(self, text: str, *, followup: bool = False) -> None:
         """Cognition → TTS → player, sentence by sentence (overlapped)."""
-        async for sentence in self._conversation.respond(text):
+        async for sentence in self._conversation.respond(text, followup=followup):
+            self._last_sentence = sentence
             seg = await self._tts.synthesize(sentence)
             if seg is not None:
                 self._player.enqueue(*seg)
