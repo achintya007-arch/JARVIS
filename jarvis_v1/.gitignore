@@ -12,8 +12,16 @@ venv/
 .venv/
 env/
 
-# Runtime data (SQLite history, Chroma vectors, vault index, web RAG index)
-data/
+# data/ mixes SOURCE (the FineWeb index builder + its blocklists, which must be
+# tracked) with RUNTIME data (SQLite history, Chroma vectors, vault index, web
+# RAG index, screenshots, the file-tool sandbox). Ignore everything in it, then
+# re-include only the source. Ignoring the whole directory previously kept the
+# builder out of git, so fresh clones (and CI) couldn't import data.*.
+data/*
+!data/*.py
+!data/blocklists/
+!data/workspace/
+data/workspace/*
 !data/workspace/.gitkeep
 
 # SQLite
@@ -27,7 +35,7 @@ data/memory/
 data/vault_index/
 data/web_index/
 
-# Piper ONNX voice models — unused since the edge-tts switch (176 MB of blobs)
+# Piper ONNX voice models (60-120 MB each) — download per README, never commit
 voices/*.onnx
 voices/*.onnx.json
 voices/cache/

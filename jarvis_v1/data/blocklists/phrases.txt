@@ -1,0 +1,13 @@
+# Exact phrases (case-insensitive) that mark a chunk as low-quality boilerplate
+# or unsafe. A chunk containing any of these is dropped. One phrase per line.
+
+click here to subscribe
+sign up for our newsletter
+all rights reserved
+terms and conditions apply
+cookies to improve your experience
+lorem ipsum
+add to cart
+buy now
+limited time offer
+enter your email

@@ -1,0 +1,26 @@
+# Source domains to exclude from the web-knowledge corpus.
+# One domain per line; matched as a suffix of the record's URL host.
+# Lines starting with # are comments.
+
+# Social / user-generated (low signal, high noise)
+facebook.com
+twitter.com
+x.com
+instagram.com
+tiktok.com
+reddit.com
+pinterest.com
+tumblr.com
+
+# Q&A / forum scrape noise
+quora.com
+answers.yahoo.com
+
+# Adult / gambling
+pornhub.com
+xvideos.com
+xnxx.com
+bet365.com
+
+# Link farms / SEO spam (extend as needed)
+ezinearticles.com

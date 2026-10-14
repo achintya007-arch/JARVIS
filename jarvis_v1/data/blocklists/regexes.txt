@@ -1,0 +1,14 @@
+# Regex patterns (Python syntax, case-insensitive) that mark a chunk for removal.
+# Used for PII scrubbing and boilerplate detection. One pattern per line.
+# A chunk matching ANY pattern is dropped.
+
+# Email addresses
+[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}
+# Phone numbers (loose international)
+\+?\d[\d\s().-]{7,}\d
+# Credit-card-like 16-digit sequences
+\b(?:\d[ -]?){15,16}\b
+# US SSN
+\b\d{3}-\d{2}-\d{4}\b
+# Excessive markup leftovers
+<[a-z]+[^>]*>

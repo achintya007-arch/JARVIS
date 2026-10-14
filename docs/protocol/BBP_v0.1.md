@@ -1,0 +1,175 @@
+# JARVIS Brain–Body Protocol v0.1
+
+Oct 14, 2026 · Akella Ahlad Achintya
+
+## Purpose and principles
+
+JARVIS splits into a Python **Brain** (the existing `core_v3`) and a C# **Body** (a Windows shell), and they share nothing but this message protocol.
+
+Events and action requests flow from Brain to Body; commands and responses flow back.
+
+- **Brain owns cognition:** wake word, speech-to-text, LLM, memory, tool decisions, text-to-speech.
+- **Body owns the desktop:** HUD overlay, tray icon, global hotkey, notifications, and native Windows actions (UI Automation, windows, audio, app launch).
+- **Brain is the source of truth.** The Body renders state and executes requested actions; it never decides on its own.
+- **Location-agnostic.** The same protocol works over localhost today and over the network later, when the Brain moves to a server.
+- **Fail safe.** If the link drops, voice keeps working in the Brain, the HUD shows offline, and no desktop action runs without a reply from the Body.
+- **Defense in depth.** The LLM's context can contain untrusted text, so both sides enforce allowlists independently.
+
+## Transport, roles, auth
+
+Use a WebSocket at `ws://127.0.0.1:8765/bbp`, with the Brain as server and the Body as client.
+
+| Decision | Choice | Why |
+| --- | --- | --- |
+| Transport | WebSocket, JSON text frames, UTF-8 | Native in both Python and .NET, easy to debug, works remotely later as `wss://` |
+| Server | Brain | Later, several bodies (laptop, phone, second PC) can connect to one brain |
+| Client | Body | Reconnects with backoff: 0.5 s, 1 s, 2 s, then every 5 s |
+| Bind | `127.0.0.1` only in v0.1 | Nothing outside the machine can connect |
+| Auth | Shared token in the `hello` message | Token generated on first Brain run and saved to a local file both sides read |
+| Binary frames | Reserved | For streaming audio to the Body later |
+
+Named pipes would be slightly faster locally, but they can't cross machines, which blocks the move to a remote brain.
+
+## Message envelope
+
+Every message in either direction uses one envelope:
+
+```json
+{
+  "v": 1,
+  "id": "7f3c…",
+  "kind": "event",
+  "topic": "voice.state",
+  "ts": "2026-10-14T01:10:00.123+05:30",
+  "corr": null,
+  "payload": { "state": "listening" }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `v` | Protocol major version |
+| `id` | Unique message ID (UUID) |
+| `kind` | `event` (fire and forget), `command` (Body asks Brain), `request` (Brain asks Body to act), `response` (reply to a request), `hello` / `welcome` / `ping` / `pong` (session) |
+| `topic` | Dotted name, such as `voice.state` or `desktop.window.focus` |
+| `ts` | Sender timestamp, ISO 8601 |
+| `corr` | For a `response`, the `id` of the request it answers; otherwise null |
+| `payload` | Topic-specific object |
+
+## Connection lifecycle
+
+The Body says hello, the Brain answers with a full state snapshot, and heartbeats detect a dead link within 15 s.
+
+1. **Body → `hello`:** `{ "client": "win-shell", "version": "0.1.0", "token": "…", "capabilities": ["hud", "notify", "hotkey", "uia", "audio", "apps"] }`
+2. **Brain → `welcome`:** `{ "session": "…", "brain_version": "3.x", "snapshot": { voice state, agent state, active goals, pending confirmations } }`. A wrong token closes the socket with code 4401.
+3. **Heartbeat:** the Body sends `ping` every 5 s; the Brain answers `pong`. Three missed pongs means disconnected.
+4. **Reconnect:** the Body retries with backoff, and each new `welcome` snapshot lets the HUD redraw instantly without replaying history.
+5. **Capabilities matter:** the Brain only routes a desktop tool to the Body if the Body declared that capability. Otherwise the tool reports itself unavailable.
+
+## Brain → Body events
+
+Events mirror what already flows on the `EventBus`, so the server is a thin adapter like the existing ones.
+
+| Topic | Payload | HUD use |
+| --- | --- | --- |
+| `voice.state` | `state`: idle, listening, processing, speaking, interrupted | Orb or ring animation |
+| `voice.transcript` | `text`, `final` (bool), `confidence` | Live caption of what you said |
+| `reply.chunk` | `turn_id`, `seq`, `text` | Reply streams in sentence by sentence |
+| `reply.done` | `turn_id` | Closes the reply card |
+| `tool.started` | `call_id`, `tool`, `summary` | "Opening VS Code…" |
+| `tool.finished` | `call_id`, `ok`, `summary` | Tick or error badge |
+| `agent.state` | `mood`, `intent`, `model`, `load` (VRAM %, RAM %) | Status strip; shows fallback-model downshifts |
+| `notify` | `notify_id`, `level` (info, warn, alert), `title`, `body`, `actions[]` | Windows toast plus HUD card |
+| `confirm.request` | `confirm_id`, `prompt`, `risk` (low, high), `timeout_s` | Approve or deny dialog |
+| `sentinel.finding` | Reserved for v0.2 | Intelligence alerts |
+
+`confirm.request` carries over your existing rule: no answer before `timeout_s` means **deny**.
+
+## Body → Brain commands
+
+Commands are what you do in the shell: type, press a hotkey, click a button.
+
+| Topic | Payload | Brain does |
+| --- | --- | --- |
+| `input.text` | `text` | Same path as typed input in text mode |
+| `voice.control` | `action`: wake, mute, unmute, cancel | Wake skips the wake word; cancel triggers barge-in |
+| `confirm.response` | `confirm_id`, `approved` | Resolves the pending gated action |
+| `notify.action` | `notify_id`, `action` | Runs the button's action, such as snooze or open |
+| `ui.hotkey` | `name` | Maps to a configured intent, such as push-to-talk |
+
+## Desktop actions and safety
+
+The Brain sends a `request`, the Body acts natively and replies with a `response` whose `corr` matches. Default timeout is 5 s.
+
+| Topic | Payload | Response `result` |
+| --- | --- | --- |
+| `desktop.app.launch` | `app_id` (allowlisted name) | `pid` |
+| `desktop.window.focus` | `app` or `title_contains` | `hwnd`, `title` |
+| `desktop.window.list` | none | Visible windows: `title`, `app`, `hwnd` |
+| `desktop.audio.set_volume` | `level` 0–100, optional `device` | Applied level |
+| `desktop.uia.read` | `app`, `scope` (window or focused) | Trimmed UI tree: name, control type, automation ID |
+| `desktop.uia.invoke` | `app`, `element` {`name`, `control_type`, `automation_id`} | `ok` |
+| `desktop.uia.set_text` | `app`, `element`, `text` | `ok` |
+
+A failure returns `{ "ok": false, "error": { "code", "message" } }`.
+
+**Safety rules:**
+
+- The Python tools in `agent_executor` keep their names and the Brain's allowlist, but become thin proxies that forward to the Body.
+- The Body keeps its **own** allowlist of apps and control types, so a compromised or confused Brain still can't drive arbitrary software.
+- `uia.invoke` on any element whose name looks destructive or outbound (send, delete, submit, pay, post) requires a `confirm.request` first, approved by you.
+- `uia.read` trims passwords and secure fields before sending anything to the Brain.
+- Text read back from apps is untrusted data; the Brain never treats it as instructions.
+
+## Errors and versioning
+
+| Code | Meaning |
+| --- | --- |
+| `E_AUTH` | Bad or missing token (socket closes, 4401) |
+| `E_UNKNOWN_TOPIC` | Receiver doesn't handle this topic |
+| `E_BAD_PAYLOAD` | Payload failed schema validation |
+| `E_NOT_ALLOWED` | Blocked by an allowlist |
+| `E_DENIED` | You declined, or the confirmation timed out |
+| `E_NOT_FOUND` | App, window or UI element not found |
+| `E_TIMEOUT` | No response in time |
+| `E_BUSY` | Receiver is mid-action; retry later |
+
+**Versioning:** adding fields or topics keeps `v: 1`, and receivers ignore fields they don't know. Removing or renaming anything bumps `v`. Unknown events are dropped silently; unknown requests get `E_UNKNOWN_TOPIC`.
+
+## Example: "Hey Jarvis, focus VS Code"
+
+1. Brain → `voice.state` `listening` after the wake word; the HUD ring lights up.
+2. Brain → `voice.transcript` `{ "text": "focus VS Code", "final": true }`.
+3. Brain → `voice.state` `processing`. The `FastRouter` matches it, so no LLM call.
+4. Brain → `tool.started` `{ "tool": "focus_window", "summary": "Focusing VS Code" }`.
+5. Brain → `request` `desktop.window.focus` `{ "app": "Code" }` with `id: A1`.
+6. Body checks its allowlist, focuses the window, and replies `response` `{ "ok": true, "title": "JARVIS – Visual Studio Code" }` with `corr: A1`.
+7. Brain → `tool.finished` `ok`, then `reply.chunk` "Done.", then `voice.state` `speaking`, then `idle`.
+
+## Implementation and build order
+
+Build read-only first, then input, then confirmations, and only then let the Body touch the desktop.
+
+**Brain side (Python):**
+
+- New adapter, for example `core_v3/adapters/bbp_server.py`, using the `websockets` library and subscribing to the `EventBus` like your existing adapters.
+- A small `RemoteDesktop` client that tools call; it sends a `request` and awaits the matching `response`.
+- Contract tests in `tests/` that validate every topic against the schemas.
+
+**Body side (C#):**
+
+- .NET 8 with WPF (simplest for a transparent, always-on-top HUD) or WinUI 3 (more modern look).
+- `ClientWebSocket` plus `System.Text.Json` for the link.
+- FlaUI (a UI Automation wrapper) for the `desktop.uia.*` actions.
+- A tray icon and a global hotkey registered through Win32 `RegisterHotKey`.
+
+**Shared:** put JSON Schema files for every topic in a `protocol/` folder at the repo root. Both sides validate against them, and they act as the living spec.
+
+**Build order:**
+
+1. Brain server plus `voice.state`, `voice.transcript` and `reply.*`; Body shows them in a bare HUD.
+2. `input.text` and `voice.control` from the Body, plus the push-to-talk hotkey.
+3. `notify` and the `confirm.request` round trip.
+4. `desktop.window.*` and `desktop.app.launch`; migrate one Python tool and compare reliability.
+5. `desktop.uia.*` with the Body-side allowlist and confirmations.
+6. Later: `sentinel.finding`, then `wss://` with per-device keys when the Brain moves off your PC.

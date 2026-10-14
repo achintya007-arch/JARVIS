@@ -29,10 +29,15 @@ import logging
 import queue as stdlib_queue
 from collections import deque
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import numpy as np
-import sounddevice as sd
-from faster_whisper import WhisperModel
+
+# sounddevice and faster_whisper are imported where they're used (initialize()
+# and __init__), not at module level, so the pure helpers here (_is_hallucination,
+# _vad_collect, …) import without an audio stack or Whisper — e.g. in CI.
+if TYPE_CHECKING:
+    import sounddevice as sd
 
 log = logging.getLogger("jarvis.stt")
 
@@ -266,6 +271,7 @@ class STTEngine:
         self._avg_logprob_min = _c("avg_logprob_min", _DEF_AVG_LOGPROB_MIN)
         self._debug           = _c("debug_audio", False)
 
+        from faster_whisper import WhisperModel
         self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
         log.info("Whisper loaded: %s on %s (%s)", model_size, device, compute_type)
 
@@ -275,6 +281,7 @@ class STTEngine:
 
     async def initialize(self) -> None:
         """Open the mic stream once and keep it running."""
+        import sounddevice as sd
         self._stream = sd.InputStream(
             samplerate = self.fs,
             channels   = 1,
