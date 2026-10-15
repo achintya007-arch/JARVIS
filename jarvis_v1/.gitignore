@@ -23,6 +23,8 @@ data/*
 !data/workspace/
 data/workspace/*
 !data/workspace/.gitkeep
+# BBP shared auth token (also covered by data/*; explicit on purpose)
+data/bbp_token
 
 # SQLite
 *.db

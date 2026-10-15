@@ -24,6 +24,7 @@ import re
 import time
 from datetime import datetime
 
+from core_v3.events import TranscriptReady, VoiceStateChanged
 from core_v3.voice.state import VoiceState, VoiceStateManager
 
 log = logging.getLogger("jarvis.voice")
@@ -50,7 +51,7 @@ def _time_of_day(now: datetime) -> str:
 class VoiceOrchestrator:
     def __init__(
         self, *, mic, wake, endpointer, stt, tts, player, interruption,
-        conversation, voice_config, resource_snapshot=None,
+        conversation, voice_config, resource_snapshot=None, bus=None,
     ) -> None:
         self._mic = mic
         self._wake = wake
@@ -67,6 +68,28 @@ class VoiceOrchestrator:
         self._running = False
         self._confirming = False          # suppresses barge-in during confirmation
         self._last_sentence = ""          # last spoken sentence (follow-up detection)
+        self._muted = False               # microphone off (BBP voice.control mute)
+
+        # Observability: publish voice facts on the bus (BBP voice.state /
+        # voice.transcript). Optional — nothing here depends on a subscriber.
+        self._bus = bus
+        self.state.add_listener(self._publish_state)
+
+    @property
+    def muted(self) -> bool:
+        return self._muted
+
+    def _publish(self, event) -> None:
+        if self._bus is None:
+            return
+        try:
+            self._bus.publish(event)
+        except Exception as e:            # never let observability break voice
+            log.debug("publish failed: %s", e)
+
+    def _publish_state(self, old: VoiceState, new: VoiceState) -> None:
+        if new != old:
+            self._publish(VoiceStateChanged(state=new.value.lower(), muted=self._muted))
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
     async def start(self) -> None:
@@ -180,6 +203,10 @@ class VoiceOrchestrator:
                 log.info("empty transcript → idle")
                 return
             print(f"[Heard] {text}", flush=True)
+            self._publish(TranscriptReady(
+                text=text, final=True,
+                confidence=getattr(self._stt, "last_confidence", None),
+            ))
 
             command = _WAKE_PREFIX_RE.sub("", text, count=1).strip()
             if not command:

@@ -136,7 +136,7 @@ core_v2/       V2 event-driven orchestrator (stable)
 core_v3/       V3 vault-centric orchestrator (active default) + voice state machine
 memory/        V3 vault memory layer
 data/          offline FineWeb web-index builder
-tools/         diagnostics (wake_check, mic_smoke, mic_check, voice_test)
+tools/         diagnostics (wake_check, mic_smoke, mic_check, voice_test, bbp_probe)
 tests/         pytest suite
 ```
 

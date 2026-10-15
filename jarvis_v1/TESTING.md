@@ -10,6 +10,18 @@
 .\run.ps1 -VoiceTest   # A/B test TTS voice/rate/pitch without the full pipeline
 ```
 
+### Brain–Body Protocol (desktop HUD)
+
+With `bbp: {enabled: true}` in `config.yaml`, the Brain serves
+`ws://127.0.0.1:8765/bbp`. Watch it with the fake Body, or the real HUD:
+
+```powershell
+python -m tools.bbp_probe              # prints welcome snapshot + every event
+python -m tools.bbp_probe --raw        # full JSON envelopes
+python -m tools.bbp_probe --token bad  # should close with 4401
+cd ..ody; dotnet test; dotnet run --project src\Jarvis.Body
+```
+
 ### Tuning the voice
 
 `tools/voice_test.py` speaks sample lines through the real TTS engine so you

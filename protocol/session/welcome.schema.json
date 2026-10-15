@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/session/welcome.schema.json",
+  "title": "welcome (Brain -> Body) payload",
+  "description": "Answer to a valid hello. The snapshot lets the HUD redraw instantly without replaying history.",
+  "type": "object",
+  "required": ["session", "brain_version", "snapshot"],
+  "properties": {
+    "session": { "type": "string", "minLength": 1 },
+    "brain_version": { "type": "string", "minLength": 1 },
+    "snapshot": {
+      "type": "object",
+      "required": ["voice", "agent", "active_goals", "pending_confirmations"],
+      "properties": {
+        "voice": {
+          "type": "object",
+          "required": ["state", "muted"],
+          "properties": {
+            "state": { "enum": ["idle", "listening", "processing", "speaking", "interrupted"] },
+            "muted": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        },
+        "agent": {
+          "type": "object",
+          "required": ["mood", "intent", "model", "load"],
+          "properties": {
+            "mood": { "type": "string" },
+            "intent": { "type": "string" },
+            "model": { "type": "string" },
+            "load": {
+              "type": "object",
+              "required": ["ram_pct", "vram_pct"],
+              "properties": {
+                "ram_pct": { "type": ["number", "null"] },
+                "vram_pct": { "type": ["number", "null"] }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "active_goals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "priority"],
+            "properties": {
+              "name": { "type": "string" },
+              "priority": { "type": "integer" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "pending_confirmations": {
+          "type": "array",
+          "description": "Each item has the confirm.request payload shape.",
+          "items": {
+            "type": "object",
+            "required": ["confirm_id", "prompt", "risk", "timeout_s"],
+            "properties": {
+              "confirm_id": { "type": "string", "minLength": 1 },
+              "prompt": { "type": "string" },
+              "risk": { "enum": ["low", "high"] },
+              "timeout_s": { "type": "number", "exclusiveMinimum": 0 }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

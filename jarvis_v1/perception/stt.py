@@ -102,6 +102,16 @@ def _is_answer(text: str) -> bool:
     return text.lower().strip(" .,!?-—\"'") in _ANSWER_WORDS
 
 
+def _confidence(avg_logprobs: list[float]) -> float | None:
+    """Transcript confidence in [0, 1]: exp of the mean per-segment Whisper
+    avg_logprob (a geometric-mean token probability). None with no segments."""
+    import math
+    if not avg_logprobs:
+        return None
+    mean = sum(avg_logprobs) / len(avg_logprobs)
+    return round(min(1.0, max(0.0, math.exp(mean))), 3)
+
+
 def _vad_collect(
     next_chunk: Callable[[], np.ndarray | None],
     *,
@@ -270,6 +280,7 @@ class STTEngine:
         self._no_speech_max   = _c("no_speech_max", _DEF_NO_SPEECH_MAX)
         self._avg_logprob_min = _c("avg_logprob_min", _DEF_AVG_LOGPROB_MIN)
         self._debug           = _c("debug_audio", False)
+        self.last_confidence: float | None = None   # set by transcribe()
 
         from faster_whisper import WhisperModel
         self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
@@ -417,7 +428,11 @@ class STTEngine:
 
         allow_answers: keep a bare "yes"/"okay"/"no" that the phantom filter
         would otherwise drop — used when replying to a question from JARVIS.
+
+        After each call, `last_confidence` holds 0-1 for the returned text
+        (exp of the mean Whisper avg_logprob over kept segments) or None.
         """
+        self.last_confidence = None
         if len(audio) < self.fs * 0.3:
             return ""
         if _rms(audio) < self.silence_threshold * 0.5:
@@ -433,6 +448,7 @@ class STTEngine:
                 vad_parameters = {"min_silence_duration_ms": 500},
             )
             kept: list[str] = []
+            logprobs: list[float] = []
             for seg in segments:
                 nsp = getattr(seg, "no_speech_prob", 0.0)
                 alp = getattr(seg, "avg_logprob", 0.0)
@@ -445,11 +461,14 @@ class STTEngine:
                         print(f"[STT] drop logprob={alp:.2f}: {seg.text!r}", flush=True)
                     continue
                 kept.append(seg.text)
+                logprobs.append(alp)
 
             text = "".join(kept).strip()
             if text and _is_hallucination(text) and not (allow_answers and _is_answer(text)):
                 log.debug("STT drop (hallucination): %r", text)
                 return ""
+            if text:
+                self.last_confidence = _confidence(logprobs)
             return text
 
         return await asyncio.to_thread(_run)

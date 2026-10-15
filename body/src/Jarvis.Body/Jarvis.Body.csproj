@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- JARVIS Body: the Windows HUD. All protocol and networking code lives in
+       Bbp.Client; this project is UI only. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>Jarvis.Body</AssemblyName>
+    <RootNamespace>Jarvis.Body</RootNamespace>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bbp.Client\Bbp.Client.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="body.settings.example.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

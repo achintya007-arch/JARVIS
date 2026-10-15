@@ -40,10 +40,18 @@ _ALLOWED: dict[VoiceState, set[VoiceState]] = {
 }
 
 
+Listener = Callable[[VoiceState, VoiceState], None]
+
+
 class VoiceStateManager:
-    def __init__(self, on_change: Callable[[VoiceState, VoiceState], None] | None = None) -> None:
+    def __init__(self, on_change: Listener | None = None) -> None:
         self._state = VoiceState.IDLE
-        self._on_change = on_change
+        self._listeners: list[Listener] = [on_change] if on_change is not None else []
+
+    def add_listener(self, fn: Listener) -> None:
+        """Call fn(old, new) on every transition. A failing listener is logged
+        and never breaks the state machine."""
+        self._listeners.append(fn)
 
     @property
     def state(self) -> VoiceState:
@@ -58,6 +66,9 @@ class VoiceStateManager:
             log.warning("Unexpected transition %s → %s", old.value, to.value)
         log.info("state: %s → %s", old.value, to.value)
         self._state = to
-        if self._on_change is not None:
-            self._on_change(old, to)
+        for fn in list(self._listeners):
+            try:
+                fn(old, to)
+            except Exception as e:
+                log.warning("state listener failed: %s", e)
         return to

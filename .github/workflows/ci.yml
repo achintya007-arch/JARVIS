@@ -46,3 +46,24 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v
+
+  body:
+    # The C# Body (WPF HUD + Bbp.Client). WPF needs a Windows runner; the
+    # client tests validate against the same protocol/ schemas as the Brain.
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: body
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build
+        run: dotnet build Jarvis.Body.sln -c Release
+
+      - name: Test
+        run: dotnet test Jarvis.Body.sln -c Release --no-build --logger "console;verbosity=normal"

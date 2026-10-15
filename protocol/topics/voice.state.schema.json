@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/voice.state.schema.json",
+  "title": "voice.state (event, Brain -> Body) payload",
+  "type": "object",
+  "required": ["state", "muted"],
+  "properties": {
+    "state": { "enum": ["idle", "listening", "processing", "speaking", "interrupted"] },
+    "muted": { "type": "boolean", "description": "Microphone off (voice.control mute)" }
+  },
+  "additionalProperties": true
+}

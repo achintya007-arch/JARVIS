@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Brain-Body Protocol client: envelope, schema validation, connection,
+       reconnect and heartbeat. No UI and no Windows APIs, so it is reusable and
+       testable anywhere. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Bbp.Client</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" Version="7.3.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The shared schemas from the repo-root protocol/ folder ship next to the
+         binaries, so the Body validates against exactly what the Brain uses. -->
+    <None Include="..\..\..\protocol\**\*.schema.json" LinkBase="protocol" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

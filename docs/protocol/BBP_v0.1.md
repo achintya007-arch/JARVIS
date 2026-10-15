@@ -1,6 +1,9 @@
 # JARVIS Brain–Body Protocol v0.1
 
 Oct 14, 2026 · Akella Ahlad Achintya
+Amended Oct 15, 2026 (see [Amendments](#amendments-oct-15-2026)); all changes are additive, so `v` stays `1`.
+
+JSON Schemas for the envelope, the session messages and every topic live in `protocol/` at the repo root and are the machine-readable form of this spec.
 
 ## Purpose and principles
 
@@ -53,8 +56,10 @@ Every message in either direction uses one envelope:
 | `kind` | `event` (fire and forget), `command` (Body asks Brain), `request` (Brain asks Body to act), `response` (reply to a request), `hello` / `welcome` / `ping` / `pong` (session) |
 | `topic` | Dotted name, such as `voice.state` or `desktop.window.focus` |
 | `ts` | Sender timestamp, ISO 8601 |
-| `corr` | For a `response`, the `id` of the request it answers; otherwise null |
+| `corr` | For a `response`, the `id` of the request (or command) it answers; otherwise null |
 | `payload` | Topic-specific object |
+
+For the session kinds (`hello`, `welcome`, `ping`, `pong`), `topic` equals `kind`.
 
 ## Connection lifecycle
 
@@ -72,18 +77,21 @@ Events mirror what already flows on the `EventBus`, so the server is a thin adap
 
 | Topic | Payload | HUD use |
 | --- | --- | --- |
-| `voice.state` | `state`: idle, listening, processing, speaking, interrupted | Orb or ring animation |
-| `voice.transcript` | `text`, `final` (bool), `confidence` | Live caption of what you said |
+| `voice.state` | `state`: idle, listening, processing, speaking, interrupted; `muted` (bool, microphone off) | Orb or ring animation; muted badge |
+| `voice.transcript` | `text`, `final` (bool), `confidence` (0–1 or null) | Live caption of what you said |
 | `reply.chunk` | `turn_id`, `seq`, `text` | Reply streams in sentence by sentence |
-| `reply.done` | `turn_id` | Closes the reply card |
+| `reply.done` | `turn_id`, `interrupted` (bool) | Closes the reply card; `interrupted` is true if the reply was cut off (barge-in, cancel, or an error mid-reply) |
 | `tool.started` | `call_id`, `tool`, `summary` | "Opening VS Code…" |
 | `tool.finished` | `call_id`, `ok`, `summary` | Tick or error badge |
 | `agent.state` | `mood`, `intent`, `model`, `load` (VRAM %, RAM %) | Status strip; shows fallback-model downshifts |
 | `notify` | `notify_id`, `level` (info, warn, alert), `title`, `body`, `actions[]` | Windows toast plus HUD card |
 | `confirm.request` | `confirm_id`, `prompt`, `risk` (low, high), `timeout_s` | Approve or deny dialog |
+| `confirm.resolved` | `confirm_id`, `approved` (bool), `by` (body, voice, text, timeout, error) | Closes the dialog on every Body, whoever answered |
 | `sentinel.finding` | Reserved for v0.2 | Intelligence alerts |
 
-`confirm.request` carries over your existing rule: no answer before `timeout_s` means **deny**.
+`confirm.request` carries over your existing rule: no answer before `timeout_s` means **deny**. The default `timeout_s` is 15 (configurable as `bbp.confirm_timeout_s`). `risk` comes from the gated tool: `run_shell` and `close_app` are high; `write_file` and `close_window` are low. While a confirmation is pending, voice/text and every connected Body race to answer; the first answer wins and `confirm.resolved` is broadcast.
+
+`voice.transcript` is always `final: true` in v0.1 (Whisper does not stream partial results). `confidence` is derived from Whisper's average log-probability over the kept segments.
 
 ## Body → Brain commands
 
@@ -91,11 +99,13 @@ Commands are what you do in the shell: type, press a hotkey, click a button.
 
 | Topic | Payload | Brain does |
 | --- | --- | --- |
-| `input.text` | `text` | Same path as typed input in text mode |
-| `voice.control` | `action`: wake, mute, unmute, cancel | Wake skips the wake word; cancel triggers barge-in |
+| `input.text` | `text` | Same path as typed input in text mode. The reply streams to the HUD as `reply.*` and is **not** spoken unless `bbp.speak_text_input` is true |
+| `voice.control` | `action`: wake, mute, unmute, cancel | Wake skips the wake word; mute turns the **microphone** off (wake word and listening; typed input still works); cancel triggers barge-in |
 | `confirm.response` | `confirm_id`, `approved` | Resolves the pending gated action |
-| `notify.action` | `notify_id`, `action` | Runs the button's action, such as snooze or open |
-| `ui.hotkey` | `name` | Maps to a configured intent, such as push-to-talk |
+| `notify.action` | `notify_id`, `action` | Runs the button's action, such as snooze or open. In v0.1 `actions[]` is always empty and this is accepted and logged only |
+| `ui.hotkey` | `name` | Maps to a configured intent. `push_to_talk` maps to wake (tap-to-talk: Win32 `RegisterHotKey` has no key-up event, so the endpointer decides when you've finished) |
+
+A command the Brain can't accept is answered with a `response` whose `topic` is `error`, whose `corr` is the command's `id`, and whose payload is `{ "ok": false, "error": { "code", "message" } }` (`E_UNKNOWN_TOPIC` or `E_BAD_PAYLOAD`). Accepted commands get no response.
 
 ## Desktop actions and safety
 
@@ -173,3 +183,28 @@ Build read-only first, then input, then confirmations, and only then let the Bod
 4. `desktop.window.*` and `desktop.app.launch`; migrate one Python tool and compare reliability.
 5. `desktop.uia.*` with the Body-side allowlist and confirmations.
 6. Later: `sentinel.finding`, then `wss://` with per-device keys when the Brain moves off your PC.
+
+## Amendments (Oct 15, 2026)
+
+Additive changes made while implementing milestones 1–3; `v` stays `1`.
+
+1. **Session topics:** for `hello`, `welcome`, `ping` and `pong`, `topic` equals `kind`.
+2. **Command errors:** an unacceptable command gets a `response` with `topic: "error"`, `corr` set to the command's `id`, and an `{ ok: false, error }` payload.
+3. **`confirm.resolved`:** new event, broadcast when a confirmation is settled by any channel, so every Body can close its dialog.
+4. **`reply.done.interrupted`:** true when the reply was cut off by barge-in, cancel, or an error mid-reply.
+5. **`confirm.request.risk`:** derived from the gated tool name (see the confirmation note above).
+6. **`voice.transcript.confidence`:** derived from Whisper's average log-probability; null when unavailable.
+7. **`voice.state.muted`:** reflects `voice.control` mute/unmute (microphone off).
+8. **Decisions:** `input.text` replies are HUD-only by default (`bbp.speak_text_input`); `ui.hotkey push_to_talk` maps to wake as tap-to-talk; `notify.action` is accepted and logged only in v0.1.
+9. **Close code 4408 (proposed, pending approval):** the Brain closes a Body it has heard nothing from (no `ping` or any other message) for `heartbeat_timeout_s` with code 4408 "heartbeat timeout". The spec only defined the Body-side rule (three missed pongs); this is the Brain-side mirror. A Body treats 4408 like any other drop and reconnects.
+
+### Brain configuration (`config.yaml`, section `bbp`)
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `false` | Start the BBP server with the Brain |
+| `host` / `port` / `path` | `127.0.0.1` / `8765` / `/bbp` | Listen address |
+| `token_path` | `data/bbp_token` | Shared token (created on first run, readable only by the current user, never committed) |
+| `heartbeat_timeout_s` | `15` | Drop a Body that has sent nothing for this long |
+| `confirm_timeout_s` | `15` | `confirm.request.timeout_s` |
+| `speak_text_input` | `false` | Also speak replies to `input.text` |

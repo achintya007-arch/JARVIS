@@ -41,9 +41,13 @@ jarvis_v1/
 │   │   ├── state.py        #   VoiceState / VoiceStateManager
 │   │   ├── orchestrator.py #   VoiceOrchestrator (IDLE→LISTEN→PROCESS→SPEAK)
 │   │   └── interruption.py #   InterruptionController (barge-in via Silero)
-│   ├── adapters.py         # ResourceAdapter (model switching on pressure)
+│   ├── adapters/           # Bus adapters (no cognition of their own)
+│   │   ├── resource.py     #   ResourceAdapter (model switching on pressure)
+│   │   ├── bbp_protocol.py #   Brain–Body Protocol envelopes + schema validation
+│   │   └── bbp_server.py   #   BBP WebSocket server (off unless bbp.enabled)
 │   ├── event_bus.py
-│   └── events.py
+│   └── events.py           # V3 events incl. VoiceStateChanged, TranscriptReady,
+│                           #   ReplyChunk, ReplyDone (forwarded to Bodies)
 │
 ├── perception/            # voice primitives (small, single-purpose)
 │   ├── microphone.py      # MicrophoneInput — single mic owner, async fan-out
@@ -94,7 +98,7 @@ jarvis_v1/
 │   ├── build_web_index.py  # Builds the FineWeb web-knowledge index
 │   └── fineweb_pipeline.py # FineWeb-Edu download + content filtering
 │
-├── tests/                  # pytest suite — 188 tests, no GPU/Ollama needed
+├── tests/                  # pytest suite — 250 tests, no GPU/Ollama needed
 │   ├── conftest.py
 │   ├── test_security.py        # shell allowlist / sandbox / confirmation
 │   ├── test_fast_router.py / test_hot_path.py
@@ -105,18 +109,29 @@ jarvis_v1/
 │   ├── test_stt_gating.py / test_stt_vad.py / test_tts_engine.py
 │   ├── test_wake_matching.py   # V2 hotword matcher
 │   ├── test_web_rag.py / test_fineweb_pipeline.py
+│   ├── test_bbp_contract.py / test_bbp_server.py / test_bbp_events.py
 │   └── test_phase_f.py
 │
 ├── tools/                  # Diagnostics (launched via run.ps1 flags)
 │   ├── wake_check.py       # -WakeCheck: live wake-word score meter
 │   ├── mic_smoke.py        # -MicSmoke: V3 end-to-end voice + latency
 │   ├── mic_check.py        # -MicCheck: V2 speech-capture diagnostic
-│   └── voice_test.py       # -VoiceTest: TTS voice/rate/pitch A/B tester
+│   ├── voice_test.py       # -VoiceTest: TTS voice/rate/pitch A/B tester
+│   └── bbp_probe.py        # fake Body: prints every BBP event (python -m tools.bbp_probe)
 │
 └── docs/
     ├── JARVIS_Design_Document_v0.1.md
     └── JARVIS_Design_Document_v0.1.pdf
 ```
+
+Outside `jarvis_v1/`: `../protocol/` (BBP JSON Schemas, shared by Brain and
+Body), `../body/` (C# Windows HUD), `../docs/protocol/BBP_v0.1.md` (spec).
+
+## Known gaps
+
+- V3 has no subscriber for `ActionSuggestion`, so actionable goal reminders
+  ("Sir, shall I …?") are dropped; plain reminders still work. Tracked in
+  [issue #1](https://github.com/achintya007-arch/JARVIS/issues/1).
 
 ## Runtime data (git-ignored, created on demand)
 
@@ -126,6 +141,7 @@ data/chroma/                # V2 ChromaDB vector store
 data/vault_index/           # V3 vault vector index
 data/web_index/             # V3 FineWeb RAG index (if built)
 data/workspace/             # file-tool sandbox
+data/bbp_token              # BBP shared auth token (current user only)
 ../vault/                   # user's Obsidian vault (personal notes + daily logs)
 ```
 

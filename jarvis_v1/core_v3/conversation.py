@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
 
 from cognition.agent_core.planner import build_tool_schemas
 from cognition.decision_engine import Decision
 from cognition.llm_client import build_system_prompt
+from core_v3.events import ReplyChunk, ReplyDone
 
 log = logging.getLogger("jarvis.conversation")
 
@@ -51,9 +53,12 @@ def _format_fast_result(tool: str, result: dict) -> str:
 class ConversationEngine:
     def __init__(
         self, *, config, llm, agent_state, decision_engine, goal_manager,
-        vault_memory, executor, agent_core, fast_router,
+        vault_memory, executor, agent_core, fast_router, bus=None,
     ) -> None:
         self._config = config
+        # Observability: each reply is published as ReplyChunk/ReplyDone (BBP
+        # reply.*). Optional — the reply flows to the caller regardless.
+        self._bus = bus
         self._llm = llm
         self._agent_state = agent_state
         self._decision = decision_engine
@@ -77,13 +82,17 @@ class ConversationEngine:
         low-signal go to the LLM, whose context holds the previous exchange.
         """
         full: list[str] = []
+        turn_id = uuid.uuid4().hex
+        completed = False       # False at exit → cut off (barge-in, cancel, error)
         try:
             # 1. Goals (single synchronous owner — create/complete short-circuit)
             goal_reply = await self._goals.handle_input(text)
             if goal_reply is not None:
                 self._agent_state.update_from_input(text)
                 full.append(goal_reply)
+                self._emit(ReplyChunk(turn_id=turn_id, seq=0, text=goal_reply))
                 yield goal_reply
+                completed = True
                 return
 
             # 2. State
@@ -101,9 +110,12 @@ class ConversationEngine:
 
             # 4. Execute → stream sentences
             async for sentence in self._execute(decision, text, messages):
+                self._emit(ReplyChunk(turn_id=turn_id, seq=len(full), text=sentence))
                 full.append(sentence)
                 yield sentence
+            completed = True
         finally:
+            self._emit(ReplyDone(turn_id=turn_id, interrupted=not completed))
             # 5. Persist the exchange (best-effort; runs even if cancelled mid-stream)
             response = " ".join(full).strip()
             if response:
@@ -111,6 +123,15 @@ class ConversationEngine:
                     await self._vault.add_exchange(text, response)
                 except Exception as e:
                     log.error("vault persist failed: %s", e)
+
+    def _emit(self, event) -> None:
+        """Publish an observability event; never let it disturb the reply."""
+        if self._bus is None:
+            return
+        try:
+            self._bus.publish(event)
+        except Exception as e:          # e.g. no running loop during GC finalisation
+            log.debug("publish failed: %s", e)
 
     # ── Execution paths ─────────────────────────────────────────────────────
     async def _execute(self, decision: Decision, text: str, messages: list[dict]) -> AsyncIterator[str]:

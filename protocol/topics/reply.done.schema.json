@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/reply.done.schema.json",
+  "title": "reply.done (event, Brain -> Body) payload",
+  "type": "object",
+  "required": ["turn_id", "interrupted"],
+  "properties": {
+    "turn_id": { "type": "string", "minLength": 1 },
+    "interrupted": { "type": "boolean", "description": "True if the reply was cut off (barge-in, cancel, or an error mid-reply)" }
+  },
+  "additionalProperties": true
+}

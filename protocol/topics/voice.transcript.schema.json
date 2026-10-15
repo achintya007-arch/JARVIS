@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/voice.transcript.schema.json",
+  "title": "voice.transcript (event, Brain -> Body) payload",
+  "type": "object",
+  "required": ["text", "final", "confidence"],
+  "properties": {
+    "text": { "type": "string" },
+    "final": { "type": "boolean", "description": "Always true in v0.1 (Whisper does not stream partials)" },
+    "confidence": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "From Whisper's average log-probability; null when unavailable"
+    }
+  },
+  "additionalProperties": true
+}

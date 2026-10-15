@@ -235,6 +235,24 @@ class WebRagConfig:
 
 
 # =========================
+# BRAIN–BODY PROTOCOL (V3)
+# =========================
+@dataclass
+class BBPConfig:
+    """WebSocket link to the C# Body (docs/protocol/BBP_v0.1.md). Off by
+    default; enable with `bbp: {enabled: true}` in config.yaml. Voice and text
+    mode work identically whether or not it is enabled or any Body connects."""
+    enabled: bool = False
+    host: str = "127.0.0.1"             # v0.1: localhost only
+    port: int = 8765
+    path: str = "/bbp"
+    token_path: str = "data/bbp_token"  # created on first run, current-user only, gitignored
+    heartbeat_timeout_s: float = 15.0   # drop a Body that has sent nothing for this long
+    confirm_timeout_s: float = 15.0     # confirm.request timeout_s (no answer = deny)
+    speak_text_input: bool = False      # also speak replies to input.text
+
+
+# =========================
 # MAIN CONFIG
 # =========================
 @dataclass
@@ -245,6 +263,7 @@ class Config:
     hotword: HotwordConfig = field(default_factory=HotwordConfig)
     wake: WakeConfig = field(default_factory=WakeConfig)
     voice: VoiceConfig = field(default_factory=VoiceConfig)
+    bbp: BBPConfig = field(default_factory=BBPConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     resources: ResourceConfig = field(default_factory=ResourceConfig)
     vault: VaultConfig = field(default_factory=VaultConfig)

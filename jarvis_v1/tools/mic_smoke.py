@@ -37,7 +37,7 @@ def _instrument(orch) -> None:
             t["announced"] = False
         elif new is VoiceState.PROCESSING:
             t["endpoint"] = now
-    orch.state._on_change = on_change
+    orch.state.add_listener(on_change)
 
     orig_enqueue = orch._player.enqueue
 

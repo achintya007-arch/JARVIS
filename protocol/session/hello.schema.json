@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/session/hello.schema.json",
+  "title": "hello (Body -> Brain) payload",
+  "description": "First message on a new connection. A wrong token closes the socket with code 4401.",
+  "type": "object",
+  "required": ["client", "version", "token", "capabilities"],
+  "properties": {
+    "client": { "type": "string", "minLength": 1, "examples": ["win-shell"] },
+    "version": { "type": "string", "minLength": 1 },
+    "token": { "type": "string", "minLength": 1 },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "e.g. hud, notify, hotkey, uia, audio, apps"
+    }
+  },
+  "additionalProperties": true
+}

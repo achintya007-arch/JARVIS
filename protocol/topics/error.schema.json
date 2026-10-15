@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/error.schema.json",
+  "title": "error (response, Brain -> Body) payload",
+  "description": "Sent as kind=response, topic=error, corr=<offending command id> when the Brain can't accept a command.",
+  "type": "object",
+  "required": ["ok", "error"],
+  "properties": {
+    "ok": { "const": false },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "enum": ["E_AUTH", "E_UNKNOWN_TOPIC", "E_BAD_PAYLOAD", "E_NOT_ALLOWED", "E_DENIED", "E_NOT_FOUND", "E_TIMEOUT", "E_BUSY"]
+        },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

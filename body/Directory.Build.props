@@ -1,0 +1,11 @@
+<Project>
+  <!-- Shared settings for every project under body/. -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Targets .NET 8 (LTS) but runs on any newer runtime (this machine has 9). -->
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+</Project>

@@ -26,6 +26,7 @@ from cognition.goal_manager import GoalManager
 from cognition.llm_client import LLMClient
 from core.config import Config
 from core_v3.adapters import ResourceAdapter
+from core_v3.adapters.bbp_server import BBPServer
 from core_v3.conversation import ConversationEngine
 from core_v3.event_bus import EventBus
 from core_v3.events import SpeakRequest, SystemEvent
@@ -84,6 +85,7 @@ class Brain:
             decision_engine=self._decision_engine, goal_manager=self._goal_manager,
             vault_memory=self._vault_memory, executor=self._executor,
             agent_core=self._agent_core, fast_router=self._fast_router,
+            bus=self._bus,
         )
 
         # ── Voice layer (rebuilt) ──────────────────────────────────────────
@@ -102,6 +104,7 @@ class Brain:
             stt=self._stt, tts=self._tts, player=self._player,
             interruption=self._interruption, conversation=self._conversation,
             voice_config=config.voice, resource_snapshot=self._resource_monitor.snapshot,
+            bus=self._bus,
         )
 
         # Resource pressure → model switching + spoken alerts (via orchestrator).
@@ -109,6 +112,12 @@ class Brain:
             self._resource_monitor, self._agent_state, self._llm, config, self._bus,
         )
         self._bus.subscribe(SpeakRequest, self._on_speak_request)
+
+        # Brain–Body Protocol server (C# shell / probe). Optional and isolated:
+        # created only when enabled; voice and text mode never depend on it.
+        self._bbp: BBPServer | None = None
+        if config.bbp.enabled:
+            self._bbp = BBPServer(config.bbp, self._bus, self._bbp_snapshot)
 
     # Late-bound executor callbacks → orchestrator.
     async def _speak_cb(self, text: str) -> None:
@@ -125,6 +134,32 @@ class Brain:
         if self._orchestrator is not None and self._orchestrator.state.is_(VoiceState.IDLE):
             await self._orchestrator.speak(event.text)
 
+    def _bbp_snapshot(self) -> dict:
+        """State a Body needs to redraw instantly (BBP welcome.snapshot)."""
+        orch = self._orchestrator
+        voice = {
+            "state": orch.state.state.value.lower() if orch else "idle",
+            "muted": orch.muted if orch else False,
+        }
+        snap = self._agent_state.snapshot()
+        res = self._resource_monitor.snapshot()
+        agent = {
+            "mood": snap.user_state,
+            "intent": snap.conversation_intent,
+            "model": self._llm.current_model,
+            "load": {"ram_pct": res.get("ram_pct"), "vram_pct": res.get("vram_pct")},
+        }
+        goals = [
+            {"name": g.name, "priority": int(g.priority)}
+            for g in self._agent_state.active_goals if g.is_active
+        ]
+        return {
+            "voice": voice,
+            "agent": agent,
+            "active_goals": goals,
+            "pending_confirmations": [],     # milestone 3: confirmation broker
+        }
+
     # ── Lifecycle ─────────────────────────────────────────────────────────────
     async def start(self) -> None:
         log.info("Brain V3 starting...")
@@ -135,6 +170,8 @@ class Brain:
         )
         await self._goal_manager.initialize()
         self._goal_task = asyncio.create_task(self._goal_manager.run())
+        if self._bbp is not None:
+            await self._bbp.start()          # logs and carries on if it can't bind
         self._bus.publish(SystemEvent(kind="startup"))
 
         mode = getattr(self.config, "mode", "wake")
@@ -175,6 +212,7 @@ class Brain:
         # all upfront left later ones un-awaited (RuntimeWarning) if an earlier
         # step was cancelled during shutdown.
         steps = [
+            ("bbp",              self._bbp.stop if self._bbp else None),
             ("orchestrator",     self._orchestrator.stop if self._orchestrator else None),
             ("goal_manager",     self._goal_manager.close),
             ("resource_monitor", self._resource_monitor.stop),

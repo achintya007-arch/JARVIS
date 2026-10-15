@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/session/ping.schema.json",
+  "title": "ping payload",
+  "description": "Heartbeat. The Body sends ping every 5 s; the Brain answers pong. Payload is empty.",
+  "type": "object",
+  "additionalProperties": true
+}

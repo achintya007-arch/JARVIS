@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/reply.chunk.schema.json",
+  "title": "reply.chunk (event, Brain -> Body) payload",
+  "description": "One sentence of a reply, streamed as it is generated.",
+  "type": "object",
+  "required": ["turn_id", "seq", "text"],
+  "properties": {
+    "turn_id": { "type": "string", "minLength": 1 },
+    "seq": { "type": "integer", "minimum": 0 },
+    "text": { "type": "string" }
+  },
+  "additionalProperties": true
+}

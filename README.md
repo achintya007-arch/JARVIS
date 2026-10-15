@@ -236,6 +236,31 @@ python -m data.build_web_index --gb 1.0    # ~200k chunks, content-filtered
 Then set `web_rag.enabled: true` in `config.yaml`. Until built, JARVIS runs fine
 without it — the index is queried only for factual queries and stays off by default.
 
+### Optional: desktop HUD (Brain–Body Protocol)
+
+JARVIS can stream its state to a separate Windows app, the **Body**, over a
+local WebSocket ([protocol spec](docs/protocol/BBP_v0.1.md), schemas in
+[`protocol/`](protocol/)). The first Body is a WPF HUD in [`body/`](body/) that
+shows the voice state, what JARVIS heard, and the reply as it streams in.
+
+The server is **off by default**. To turn it on, add this to `config.yaml`:
+
+```yaml
+bbp:
+  enabled: true          # listens on ws://127.0.0.1:8765/bbp (localhost only)
+```
+
+On first run the Brain creates a shared auth token at `data/bbp_token`, readable
+only by your user and never committed. Then start the HUD (`dotnet run --project
+body/src/Jarvis.Body`), or watch the raw events with the probe:
+
+```bash
+python -m tools.bbp_probe
+```
+
+If the server can't start, or no Body is connected, voice and text mode work
+exactly as before.
+
 ## Security posture
 
 Tool execution is an LLM-driven surface, and the LLM's context can include
@@ -259,12 +284,13 @@ are skipped via `pytest.importorskip`):
 
 ```bash
 cd jarvis_v1
-pytest tests/ -v          # 188 tests
+pytest tests/ -v          # 250 tests
 ruff check .              # lint incl. tests/ (CI-blocking)
 ```
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the suite on
-Python 3.10 and 3.11, with `ruff` as a blocking gate.
+Python 3.10 and 3.11, with `ruff` as a blocking gate, and builds and tests the
+C# Body (`body/`) on Windows.
 
 ## Project layout
 
@@ -277,7 +303,8 @@ jarvis_v1/
 ├── core_common/       # shared primitives: EventBus, events, SpeakingGuard
 ├── core_v2/           # V2 orchestrator (stable): brain, adapters, bus
 ├── core_v3/           # V3 orchestrator (active): composition root,
-│   └── voice/         #   conversation engine, voice state machine
+│   ├── adapters/      #   conversation engine, resource + BBP server adapters,
+│   └── voice/         #   voice state machine
 ├── perception/        # mic, wake word, endpointer, stt, tts, audio player,
 │                      #   cues; hotword (V2)
 ├── cognition/         # llm_client, decision_engine, agent_state, goals,
@@ -287,10 +314,14 @@ jarvis_v1/
 ├── infra/             # resource monitor (VRAM/RAM watchdog)
 ├── memory/            # V3 vault: vault, indexer, embeddings, web_rag
 ├── data/              # offline FineWeb index builder
-├── tests/             # pytest suite (188 tests)
-├── tools/             # diagnostics: wake_check, mic_smoke, mic_check, voice_test
+├── tests/             # pytest suite (250 tests)
+├── tools/             # diagnostics: wake_check, mic_smoke, mic_check, voice_test,
+│                      #   bbp_probe (fake Body)
 └── docs/              # engineering design document (md + pdf)
 ```
+
+Next to `jarvis_v1/`: `protocol/` holds the Brain–Body Protocol JSON Schemas,
+`body/` the C# Windows HUD, and `docs/protocol/` the protocol spec.
 
 A deeper module-by-module map is in
 [`jarvis_v1/PROJECT_STRUCTURE.md`](jarvis_v1/PROJECT_STRUCTURE.md).
@@ -311,6 +342,8 @@ A deeper module-by-module map is in
 | [`jarvis_v1/PROJECT_STRUCTURE.md`](jarvis_v1/PROJECT_STRUCTURE.md) | Module-by-module layout |
 | [`jarvis_v1/docs/JARVIS_Design_Document_v0.1.md`](jarvis_v1/docs/JARVIS_Design_Document_v0.1.md) | Full engineering design + diagrams |
 | [`jarvis_v1/TESTING.md`](jarvis_v1/TESTING.md) | Test suite and how to run it |
+| [`docs/protocol/BBP_v0.1.md`](docs/protocol/BBP_v0.1.md) | Brain–Body Protocol spec |
+| [`body/README.md`](body/README.md) | The Windows HUD: build, run, settings |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, conventions, PR flow |
 
 ## License
