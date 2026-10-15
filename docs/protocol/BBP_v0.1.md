@@ -209,11 +209,11 @@ Additive changes made while implementing milestones 1–3; `v` stays `1`.
 8. **Decisions:** `input.text` replies are HUD-only by default (`bbp.speak_text_input`); `ui.hotkey push_to_talk` maps to wake as tap-to-talk; `notify.action` is accepted and logged only in v0.1.
 9. **Close code 4408 (approved):** the Brain closes a Body it has heard nothing from (no `ping` or any other message) for `heartbeat_timeout_s` with code 4408 "idle timeout". This mirrors the Body-side rule (three missed pongs). The Brain closes with 1000 when it shuts down. Body behaviour for every code is in the close-code table under "Connection lifecycle".
 
-10. **Command refusals (proposed, pending approval):** a valid command the Brain can't act on right now is answered with an error response, like `E_UNKNOWN_TOPIC` and `E_BAD_PAYLOAD`:
+10. **Command refusals (approved):** a valid command the Brain can't act on right now is answered with an error response, like `E_UNKNOWN_TOPIC` and `E_BAD_PAYLOAD`:
     - `E_BUSY`: `input.text` or wake while a turn is already in progress.
     - `E_NOT_ALLOWED`: `voice.control` or `push_to_talk` while the Brain runs in text mode; wake or `push_to_talk` while the microphone is muted.
     - `E_NOT_FOUND`: `ui.hotkey` with a name that maps to nothing; `unmute` when no microphone can be opened.
-11. **`voice.control` details (proposed, pending approval):**
+11. **`voice.control` details (approved):**
     - `cancel` stops the current turn wherever it is (listening, thinking or speaking) and returns to idle. It interrupts like barge-in but doesn't listen again, because it comes from a button, not speech.
     - wake (or `push_to_talk`) while JARVIS is speaking is a barge-in: speech stops and JARVIS listens for the new command.
     - `mute` closes the microphone stream, so the OS microphone indicator goes off. A reply already being spoken finishes. The muted state survives a Body reconnect (it is in the `welcome` snapshot).

@@ -20,6 +20,7 @@ from collections.abc import Callable
 from typing import Any
 
 from core_v3.adapters.bbp_protocol import BBPError
+from core_v3.conversation import TURN_FAILED_REPLY
 
 log = logging.getLogger("jarvis.bbp")
 
@@ -54,8 +55,14 @@ class BBPCommands:
             raise BBPError("E_BUSY", "JARVIS is answering another message; try again in a moment")
         async with self._turn_lock:
             print(f"\n[HUD] You: {text}", flush=True)
-            async for sentence in self._conv.respond(text):
-                print(f"JARVIS: {sentence}", flush=True)
+            try:
+                # Ollama down is answered inside respond() (LLM_UNREACHABLE_REPLY);
+                # anything else ends the turn with an apology, like stdin input.
+                async for sentence in self._conv.respond(text):
+                    print(f"JARVIS: {sentence}", flush=True)
+            except Exception as e:
+                log.error("typed turn from %s failed: %s", client.client, e, exc_info=True)
+                print(f"JARVIS: {TURN_FAILED_REPLY}", flush=True)
 
     # ── voice.control ─────────────────────────────────────────────────────────
     async def voice_control(self, client, message: dict[str, Any]) -> None:

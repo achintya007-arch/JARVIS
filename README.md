@@ -286,7 +286,7 @@ are skipped via `pytest.importorskip`):
 
 ```bash
 cd jarvis_v1
-pytest tests/ -v          # 305 tests
+pytest tests/ -v          # 315 tests
 ruff check .              # lint incl. tests/ (CI-blocking)
 ```
 
@@ -316,7 +316,7 @@ jarvis_v1/
 ├── infra/             # resource monitor (VRAM/RAM watchdog)
 ├── memory/            # V3 vault: vault, indexer, embeddings, web_rag
 ├── data/              # offline FineWeb index builder
-├── tests/             # pytest suite (305 tests)
+├── tests/             # pytest suite (315 tests)
 ├── tools/             # diagnostics: wake_check, mic_smoke, mic_check, voice_test,
 │                      #   bbp_probe (fake Body)
 └── docs/              # engineering design document (md + pdf)

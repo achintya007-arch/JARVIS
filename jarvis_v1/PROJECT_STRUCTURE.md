@@ -99,7 +99,7 @@ jarvis_v1/
 │   ├── build_web_index.py  # Builds the FineWeb web-knowledge index
 │   └── fineweb_pipeline.py # FineWeb-Edu download + content filtering
 │
-├── tests/                  # pytest suite — 305 tests, no GPU/Ollama needed
+├── tests/                  # pytest suite — 315 tests, no GPU/Ollama needed
 │   ├── conftest.py
 │   ├── test_security.py        # shell allowlist / sandbox / confirmation
 │   ├── test_fast_router.py / test_hot_path.py
