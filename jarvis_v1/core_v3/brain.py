@@ -28,7 +28,7 @@ from core.config import Config
 from core_v3.adapters import ResourceAdapter
 from core_v3.adapters.bbp_commands import BBPCommands
 from core_v3.adapters.bbp_server import BBPServer
-from core_v3.conversation import ConversationEngine
+from core_v3.conversation import TURN_FAILED_REPLY, ConversationEngine
 from core_v3.event_bus import EventBus
 from core_v3.events import SpeakRequest, SystemEvent
 from core_v3.voice.orchestrator import VoiceOrchestrator
@@ -203,10 +203,15 @@ class Brain:
             last = ""
             # If JARVIS's previous reply was a question, a short answer ("yes")
             # is a reply to it, not low-signal noise.
-            async with self._turn_lock:      # a Body's input.text waits its turn (E_BUSY)
-                async for sentence in self._conversation.respond(text, followup=asked_question):
-                    last = sentence
-                    print(f"JARVIS: {sentence}", flush=True)
+            try:
+                async with self._turn_lock:  # a Body's input.text waits its turn (E_BUSY)
+                    async for sentence in self._conversation.respond(text, followup=asked_question):
+                        last = sentence
+                        print(f"JARVIS: {sentence}", flush=True)
+            except Exception as e:      # a failed turn must not end the session
+                log.error("text turn failed: %s", e, exc_info=True)
+                last = TURN_FAILED_REPLY
+                print(f"JARVIS: {TURN_FAILED_REPLY}", flush=True)
             asked_question = last.rstrip().endswith("?")
 
     async def stop(self) -> None:

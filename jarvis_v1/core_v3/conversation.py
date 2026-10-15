@@ -21,6 +21,8 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
 
+import httpx
+
 from cognition.agent_core.planner import build_tool_schemas
 from cognition.decision_engine import Decision
 from cognition.llm_client import build_system_prompt
@@ -30,6 +32,11 @@ log = logging.getLogger("jarvis.conversation")
 
 _STRIP_RE = re.compile(r"```.*?```|`[^`]*`|[*_#~>|\\]|\[([^\]]+)\]\([^)]+\)", re.DOTALL)
 _FAKED_ACTION_RE = re.compile(r"\b(opening|launching|starting|playing)\b", re.IGNORECASE)
+
+# Spoken when Ollama is down/unreachable (voice and text share this path).
+LLM_UNREACHABLE_REPLY = "I can't reach my language model right now, Sir."
+# Said by the voice/text front-ends when a turn fails for any other reason.
+TURN_FAILED_REPLY = "I ran into a problem with that, Sir."
 
 
 def _clean(text: str) -> str:
@@ -84,6 +91,7 @@ class ConversationEngine:
         full: list[str] = []
         turn_id = uuid.uuid4().hex
         completed = False       # False at exit → cut off (barge-in, cancel, error)
+        persist = True          # False → don't store a canned fallback as history
         try:
             # 1. Goals (single synchronous owner — create/complete short-circuit)
             goal_reply = await self._goals.handle_input(text)
@@ -103,22 +111,33 @@ class ConversationEngine:
             decision = await self._decision.decide(text=text, state=state, memories=[], messages=[])
             if followup and decision.action_type == "ignore":
                 decision = Decision(action_type="llm", reason="llm:followup_answer")
-            messages: list[dict] = []
-            if decision.action_type == "llm":
-                messages = await self._vault.build_messages(text, intent=state.conversation_intent)
             log.info("Decision: type=%s reason=%s", decision.action_type, decision.reason)
 
             # 4. Execute → stream sentences
-            async for sentence in self._execute(decision, text, messages):
-                self._emit(ReplyChunk(turn_id=turn_id, seq=len(full), text=sentence))
-                full.append(sentence)
-                yield sentence
+            try:
+                messages: list[dict] = []
+                if decision.action_type == "llm":
+                    messages = await self._vault.build_messages(text, intent=state.conversation_intent)
+                async for sentence in self._execute(decision, text, messages):
+                    self._emit(ReplyChunk(turn_id=turn_id, seq=len(full), text=sentence))
+                    full.append(sentence)
+                    yield sentence
+            except httpx.TransportError as e:
+                # Ollama down / unreachable. Before anything was said, answer
+                # with a spoken fallback; mid-reply, let the caller see the cut.
+                if full:
+                    raise
+                log.warning("LLM unreachable (%s: %s) → fallback reply", type(e).__name__, e)
+                persist = False
+                self._emit(ReplyChunk(turn_id=turn_id, seq=0, text=LLM_UNREACHABLE_REPLY))
+                full.append(LLM_UNREACHABLE_REPLY)
+                yield LLM_UNREACHABLE_REPLY
             completed = True
         finally:
             self._emit(ReplyDone(turn_id=turn_id, interrupted=not completed))
             # 5. Persist the exchange (best-effort; runs even if cancelled mid-stream)
             response = " ".join(full).strip()
-            if response:
+            if response and persist:
                 try:
                     await self._vault.add_exchange(text, response)
                 except Exception as e:

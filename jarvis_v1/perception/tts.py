@@ -26,7 +26,6 @@ import re
 from pathlib import Path
 
 import numpy as np
-import sounddevice as sd
 
 log = logging.getLogger("jarvis.tts")
 
@@ -193,6 +192,8 @@ class TTSEngine:
                     had_sentinel = True  # preserve shutdown request
         except asyncio.QueueEmpty:
             pass
+        import sounddevice as sd  # lazy: module imports without audio (CI)
+
         sd.stop()                        # cut the currently-playing segment
         if had_sentinel:
             await self._queue.put(None)
@@ -200,6 +201,8 @@ class TTSEngine:
     # ── Player loop ───────────────────────────────────────────────────────────
 
     async def _player_loop(self) -> None:
+        import sounddevice as sd  # lazy: module imports without audio (CI)
+
         while True:
             item = await self._queue.get()
             if item is None:

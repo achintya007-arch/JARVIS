@@ -15,9 +15,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
-import sounddevice as sd
+
+# sounddevice is imported in start(), not at module level, so the V3 Brain
+# imports without an audio stack — e.g. in CI.
+if TYPE_CHECKING:
+    import sounddevice as sd
 
 log = logging.getLogger("jarvis.mic")
 
@@ -33,6 +38,8 @@ class MicrophoneInput:
         self._subscribers: set[asyncio.Queue] = set()
 
     async def start(self) -> None:
+        import sounddevice as sd
+
         self._loop = asyncio.get_running_loop()
         self._stream = sd.InputStream(
             samplerate = self.fs,

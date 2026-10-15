@@ -29,6 +29,7 @@ import re
 import time
 from datetime import datetime
 
+from core_v3.conversation import TURN_FAILED_REPLY
 from core_v3.events import TranscriptReady, VoiceStateChanged
 from core_v3.voice.state import VoiceState, VoiceStateManager
 
@@ -359,12 +360,21 @@ class VoiceOrchestrator:
 
     async def _produce_speech(self, text: str, *, followup: bool = False) -> None:
         """Cognition → TTS → player, sentence by sentence (overlapped)."""
-        async for sentence in self._conversation.respond(text, followup=followup):
-            self._last_sentence = sentence
-            seg = await self._tts.synthesize(sentence)
-            if seg is not None:
-                self._player.enqueue(*seg)
-            print(f"  … {sentence}", flush=True)
+        try:
+            async for sentence in self._conversation.respond(text, followup=followup):
+                await self._say_sentence(sentence)
+        except Exception as e:
+            # _speak_response gathers this task with return_exceptions=True, so
+            # without this the failure would vanish silently mid-turn.
+            log.error("voice turn failed: %s", e, exc_info=True)
+            await self._say_sentence(TURN_FAILED_REPLY)
+
+    async def _say_sentence(self, sentence: str) -> None:
+        self._last_sentence = sentence
+        seg = await self._tts.synthesize(sentence)
+        if seg is not None:
+            self._player.enqueue(*seg)
+        print(f"  … {sentence}", flush=True)
 
     async def _await_playback(self, produce: asyncio.Task) -> None:
         await produce                       # all sentences enqueued (or cancelled)
