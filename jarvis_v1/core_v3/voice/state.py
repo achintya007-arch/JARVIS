@@ -2,7 +2,8 @@
 VoiceState + VoiceStateManager — the explicit state machine.
 
 States:
-  IDLE        only the wake-word detector is active
+  IDLE        only the wake-word detector is active (a typed BBP input.text
+              goes straight to PROCESSING)
   LISTENING   capturing the user's utterance (endpointer decides when done)
   PROCESSING  transcribing + running cognition
   SPEAKING    playing TTS, with barge-in monitoring active
@@ -32,7 +33,7 @@ class VoiceState(Enum):
 
 # Allowed transitions — anything else is a bug and is logged as a warning.
 _ALLOWED: dict[VoiceState, set[VoiceState]] = {
-    VoiceState.IDLE:        {VoiceState.LISTENING},
+    VoiceState.IDLE:        {VoiceState.LISTENING, VoiceState.PROCESSING},   # typed input skips LISTENING
     VoiceState.LISTENING:   {VoiceState.PROCESSING, VoiceState.IDLE},
     VoiceState.PROCESSING:  {VoiceState.SPEAKING, VoiceState.IDLE, VoiceState.INTERRUPTED},
     VoiceState.SPEAKING:    {VoiceState.INTERRUPTED, VoiceState.IDLE},

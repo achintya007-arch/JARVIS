@@ -128,3 +128,34 @@ class TestRejections:
             bbp.parse("not json")
         with pytest.raises(bbp.BBPError):
             bbp.parse(b"\x00\x01")
+
+
+# ── Milestone 2: Body → Brain commands ────────────────────────────────────────
+
+BODY_COMMANDS = [
+    bbp.envelope("command", "input.text", {"text": "what's on my calendar"}),
+    bbp.envelope("command", "voice.control", {"action": "wake"}),
+    bbp.envelope("command", "voice.control", {"action": "mute"}),
+    bbp.envelope("command", "voice.control", {"action": "unmute"}),
+    bbp.envelope("command", "voice.control", {"action": "cancel"}),
+    bbp.envelope("command", "ui.hotkey", {"name": "push_to_talk"}),
+    bbp.error_response("cmd-2", "E_BUSY", "JARVIS is speaking; try again in a moment"),
+    bbp.error_response("cmd-3", "E_NOT_ALLOWED", "the microphone is muted"),
+    bbp.error_response("cmd-4", "E_NOT_FOUND", "no action is mapped to hotkey 'x'"),
+]
+
+
+class TestBodyCommands:
+    @pytest.mark.parametrize("message", BODY_COMMANDS, ids=lambda m: f"{m['kind']}:{m['topic']}")
+    def test_validates(self, message):
+        bbp.validate(message)
+
+    @pytest.mark.parametrize("payload", [{"text": ""}, {"text": "   "}, {"text": "x" * 4001}, {}])
+    def test_bad_input_text(self, payload):
+        assert _code(bbp.envelope("command", "input.text", payload)) == "E_BAD_PAYLOAD"
+
+    def test_bad_voice_action(self):
+        assert _code(bbp.envelope("command", "voice.control", {"action": "dance"})) == "E_BAD_PAYLOAD"
+
+    def test_bad_hotkey_name(self):
+        assert _code(bbp.envelope("command", "ui.hotkey", {"name": "Push To Talk"})) == "E_BAD_PAYLOAD"

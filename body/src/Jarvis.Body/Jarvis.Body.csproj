@@ -5,10 +5,21 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- Only for the tray icon (NotifyIcon); everything else is WPF. -->
+    <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Jarvis.Body</AssemblyName>
     <RootNamespace>Jarvis.Body</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- WinForms/System.Drawing names clash with WPF ones (Application,
+         MessageBox, Color, Brush…); reference them explicitly instead. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Jarvis.Body.Tests" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Bbp.Client\Bbp.Client.csproj" />
   </ItemGroup>

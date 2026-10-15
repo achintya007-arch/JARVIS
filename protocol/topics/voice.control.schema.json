@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/voice.control.schema.json",
+  "title": "voice.control (command, Body -> Brain) payload",
+  "description": "wake: skip the wake word. mute/unmute: microphone off/on (typed input still works). cancel: stop the current turn.",
+  "type": "object",
+  "required": ["action"],
+  "properties": {
+    "action": { "enum": ["wake", "mute", "unmute", "cancel"] }
+  },
+  "additionalProperties": true
+}

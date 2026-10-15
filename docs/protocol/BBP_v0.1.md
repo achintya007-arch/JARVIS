@@ -71,6 +71,17 @@ The Body says hello, the Brain answers with a full state snapshot, and heartbeat
 4. **Reconnect:** the Body retries with backoff, and each new `welcome` snapshot lets the HUD redraw instantly without replaying history.
 5. **Capabilities matter:** the Brain only routes a desktop tool to the Body if the Body declared that capability. Otherwise the tool reports itself unavailable.
 
+**Close codes:**
+
+| Code | Meaning | Body behaviour |
+| --- | --- | --- |
+| 1000 | Normal close (brain shutting down) | Reconnect with normal backoff |
+| 4401 | Bad or missing token | Stop retrying; show "auth failed, check token" on the HUD and tray |
+| 4408 | Idle timeout (no message for 15 s) | Reconnect immediately, then normal backoff |
+| Anything else / network drop | Unexpected | Reconnect with normal backoff |
+
+After a 4401 the Body makes no further attempts with the rejected token. It tries again only when the token file holds a different token, or when you choose Reconnect from the tray. Each session that reached `welcome` earns one immediate retry after a 4408.
+
 ## Brain → Body events
 
 Events mirror what already flows on the `EventBus`, so the server is a thin adapter like the existing ones.
@@ -196,7 +207,16 @@ Additive changes made while implementing milestones 1–3; `v` stays `1`.
 6. **`voice.transcript.confidence`:** derived from Whisper's average log-probability; null when unavailable.
 7. **`voice.state.muted`:** reflects `voice.control` mute/unmute (microphone off).
 8. **Decisions:** `input.text` replies are HUD-only by default (`bbp.speak_text_input`); `ui.hotkey push_to_talk` maps to wake as tap-to-talk; `notify.action` is accepted and logged only in v0.1.
-9. **Close code 4408 (proposed, pending approval):** the Brain closes a Body it has heard nothing from (no `ping` or any other message) for `heartbeat_timeout_s` with code 4408 "heartbeat timeout". The spec only defined the Body-side rule (three missed pongs); this is the Brain-side mirror. A Body treats 4408 like any other drop and reconnects.
+9. **Close code 4408 (approved):** the Brain closes a Body it has heard nothing from (no `ping` or any other message) for `heartbeat_timeout_s` with code 4408 "idle timeout". This mirrors the Body-side rule (three missed pongs). The Brain closes with 1000 when it shuts down. Body behaviour for every code is in the close-code table under "Connection lifecycle".
+
+10. **Command refusals (proposed, pending approval):** a valid command the Brain can't act on right now is answered with an error response, like `E_UNKNOWN_TOPIC` and `E_BAD_PAYLOAD`:
+    - `E_BUSY`: `input.text` or wake while a turn is already in progress.
+    - `E_NOT_ALLOWED`: `voice.control` or `push_to_talk` while the Brain runs in text mode; wake or `push_to_talk` while the microphone is muted.
+    - `E_NOT_FOUND`: `ui.hotkey` with a name that maps to nothing; `unmute` when no microphone can be opened.
+11. **`voice.control` details (proposed, pending approval):**
+    - `cancel` stops the current turn wherever it is (listening, thinking or speaking) and returns to idle. It interrupts like barge-in but doesn't listen again, because it comes from a button, not speech.
+    - wake (or `push_to_talk`) while JARVIS is speaking is a barge-in: speech stops and JARVIS listens for the new command.
+    - `mute` closes the microphone stream, so the OS microphone indicator goes off. A reply already being spoken finishes. The muted state survives a Body reconnect (it is in the `welcome` snapshot).
 
 ### Brain configuration (`config.yaml`, section `bbp`)
 

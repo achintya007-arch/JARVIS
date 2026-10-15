@@ -44,7 +44,8 @@ jarvis_v1/
 │   ├── adapters/           # Bus adapters (no cognition of their own)
 │   │   ├── resource.py     #   ResourceAdapter (model switching on pressure)
 │   │   ├── bbp_protocol.py #   Brain–Body Protocol envelopes + schema validation
-│   │   └── bbp_server.py   #   BBP WebSocket server (off unless bbp.enabled)
+│   │   ├── bbp_server.py   #   BBP WebSocket server (off unless bbp.enabled)
+│   │   └── bbp_commands.py #   Body commands: input.text, voice.control, ui.hotkey
 │   ├── event_bus.py
 │   └── events.py           # V3 events incl. VoiceStateChanged, TranscriptReady,
 │                           #   ReplyChunk, ReplyDone (forwarded to Bodies)
@@ -98,7 +99,7 @@ jarvis_v1/
 │   ├── build_web_index.py  # Builds the FineWeb web-knowledge index
 │   └── fineweb_pipeline.py # FineWeb-Edu download + content filtering
 │
-├── tests/                  # pytest suite — 250 tests, no GPU/Ollama needed
+├── tests/                  # pytest suite — 305 tests, no GPU/Ollama needed
 │   ├── conftest.py
 │   ├── test_security.py        # shell allowlist / sandbox / confirmation
 │   ├── test_fast_router.py / test_hot_path.py
@@ -110,6 +111,7 @@ jarvis_v1/
 │   ├── test_wake_matching.py   # V2 hotword matcher
 │   ├── test_web_rag.py / test_fineweb_pipeline.py
 │   ├── test_bbp_contract.py / test_bbp_server.py / test_bbp_events.py
+│   ├── test_bbp_commands.py / test_voice_body_controls.py
 │   └── test_phase_f.py
 │
 ├── tools/                  # Diagnostics (launched via run.ps1 flags)

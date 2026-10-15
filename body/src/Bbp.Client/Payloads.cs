@@ -32,6 +32,15 @@ public sealed record ReplyDonePayload(string TurnId, bool Interrupted);
 
 public sealed record ErrorInfo(string Code, string Message);
 
+// Body → Brain commands (milestone 2)
+
+public sealed record InputTextPayload(string Text);
+
+/// <summary>action: wake, mute, unmute, cancel</summary>
+public sealed record VoiceControlPayload(string Action);
+
+public sealed record HotkeyPayload(string Name);
+
 public sealed record ErrorPayload(bool Ok, ErrorInfo Error);
 
 public static class Topics
@@ -41,4 +50,7 @@ public static class Topics
     public const string ReplyChunk = "reply.chunk";
     public const string ReplyDone = "reply.done";
     public const string Error = "error";
+    public const string InputText = "input.text";
+    public const string VoiceControl = "voice.control";
+    public const string UiHotkey = "ui.hotkey";
 }

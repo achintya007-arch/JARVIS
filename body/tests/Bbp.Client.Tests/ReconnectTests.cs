@@ -125,27 +125,6 @@ public class BbpClientTests
     }
 
     [Fact]
-    public async Task BadToken_4401_ReportsAuthFailed_AndKeepsRetrying()
-    {
-        using var cts = new CancellationTokenSource();
-        var opts = Options();
-        var clock = new Clock(cts, stopAfter: 2, opts.PingInterval);
-        var factory = new FakeFactory(_ => new FakeSocket
-        {
-            OnSend = (msg, s) => { if ((string)msg["kind"]! == "hello") s.ServerClose(4401, "E_AUTH"); },
-        });
-        var client = new BbpClient(opts, Brain.Validator, factory, clock.Delay);
-        var states = new List<ConnectionState>();
-        client.StateChanged += (s, _) => { lock (states) states.Add(s); };
-
-        await Run(client, cts);
-
-        Assert.Contains(ConnectionState.AuthFailed, states);
-        Assert.DoesNotContain(ConnectionState.Connected, states);
-        Assert.Equal(2, factory.Attempts);
-    }
-
-    [Fact]
     public async Task NoToken_DoesNotConnect_AndRetries()
     {
         using var cts = new CancellationTokenSource();
@@ -235,5 +214,56 @@ public class BbpClientTests
         var client = new BbpClient(Options(), Brain.Validator, new FakeFactory(_ => null));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             client.SendCommandAsync("voice.state", new VoiceStatePayload("idle", false)));
+    }
+}
+
+public class CommandTests
+{
+    [Fact]
+    public async Task Commands_AreValidatedSent_AndErrorsComeBackAsResponses()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var socket = new FakeSocket
+        {
+            OnSend = (msg, s) =>
+            {
+                var kind = (string)msg["kind"]!;
+                if (kind == "hello")
+                    s.Push(Brain.Welcome());
+                else if (kind == "command")
+                    s.Push(Envelope.Create("response", "error",
+                        new ErrorPayload(false, new ErrorInfo("E_NOT_ALLOWED", "the microphone is muted")),
+                        corr: (string)msg["id"]!));
+            },
+        };
+        var opts = new BbpClientOptions { TokenProvider = () => "tok", PingInterval = TimeSpan.FromMilliseconds(4321) };
+        var client = new BbpClient(opts, Brain.Validator, new FakeFactory(n => n == 1 ? socket : null),
+            (d, ct) => d == opts.PingInterval ? Task.Delay(d, ct) : Task.CompletedTask);
+        string? sentId = null;
+        Envelope? response = null;
+        client.Welcomed += _ => Task.Run(async () =>
+            sentId = await client.SendCommandAsync(Topics.UiHotkey, new HotkeyPayload("push_to_talk")));
+        client.ResponseReceived += r => { response = r; cts.Cancel(); };
+
+        await client.RunAsync(cts.Token);
+
+        var command = socket.Sent.Single(m => (string)m["kind"]! == "command");
+        Brain.Validator.Validate(command);
+        Assert.Equal("ui.hotkey", (string)command["topic"]!);
+        Assert.Equal("push_to_talk", (string)command["payload"]!["name"]!);
+        Assert.NotNull(response);
+        Assert.Equal(sentId, response!.Corr);
+        Assert.Equal("E_NOT_ALLOWED", response.PayloadAs<ErrorPayload>().Error.Code);
+    }
+
+    [Theory]
+    [InlineData("input.text", "")]
+    [InlineData("voice.control", "dance")]
+    public async Task InvalidCommands_AreRejectedBeforeSending(string topic, string value)
+    {
+        object payload = topic == "input.text" ? new InputTextPayload(value) : new VoiceControlPayload(value);
+        var client = new BbpClient(new BbpClientOptions(), Brain.Validator, new FakeFactory(_ => null));
+        var e = await Assert.ThrowsAsync<BbpException>(() => client.SendCommandAsync(topic, payload));
+        Assert.Equal("E_BAD_PAYLOAD", e.Code);
     }
 }

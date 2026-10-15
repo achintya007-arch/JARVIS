@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/input.text.schema.json",
+  "title": "input.text (command, Body -> Brain) payload",
+  "description": "Typed input from the Body. Same path as text mode; the reply streams back as reply.* and is spoken only if bbp.speak_text_input is true.",
+  "type": "object",
+  "required": ["text"],
+  "properties": {
+    "text": { "type": "string", "minLength": 1, "maxLength": 4000, "pattern": "[^\\s]", "description": "At least one non-space character" }
+  },
+  "additionalProperties": true
+}

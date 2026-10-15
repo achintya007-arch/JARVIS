@@ -240,8 +240,10 @@ without it — the index is queried only for factual queries and stays off by de
 
 JARVIS can stream its state to a separate Windows app, the **Body**, over a
 local WebSocket ([protocol spec](docs/protocol/BBP_v0.1.md), schemas in
-[`protocol/`](protocol/)). The first Body is a WPF HUD in [`body/`](body/) that
-shows the voice state, what JARVIS heard, and the reply as it streams in.
+[`protocol/`](protocol/)). The first Body is a WPF HUD in [`body/`](body/). It
+shows the voice state, what JARVIS heard, and the reply as it streams in. You
+can also type to JARVIS from it, mute the microphone from its tray icon, and use
+Ctrl+Alt+J as push-to-talk from anywhere in Windows.
 
 The server is **off by default**. To turn it on, add this to `config.yaml`:
 
@@ -284,7 +286,7 @@ are skipped via `pytest.importorskip`):
 
 ```bash
 cd jarvis_v1
-pytest tests/ -v          # 250 tests
+pytest tests/ -v          # 305 tests
 ruff check .              # lint incl. tests/ (CI-blocking)
 ```
 
@@ -314,7 +316,7 @@ jarvis_v1/
 ├── infra/             # resource monitor (VRAM/RAM watchdog)
 ├── memory/            # V3 vault: vault, indexer, embeddings, web_rag
 ├── data/              # offline FineWeb index builder
-├── tests/             # pytest suite (250 tests)
+├── tests/             # pytest suite (305 tests)
 ├── tools/             # diagnostics: wake_check, mic_smoke, mic_check, voice_test,
 │                      #   bbp_probe (fake Body)
 └── docs/              # engineering design document (md + pdf)

@@ -11,6 +11,9 @@ public sealed class BodyState
     public string VoiceState { get; private set; } = "idle";
     public bool Muted { get; private set; }
     public string Transcript { get; private set; } = "";
+
+    /// <summary>True when <see cref="Transcript"/> is something you typed on the Body.</summary>
+    public bool TranscriptTyped { get; private set; }
     public double? TranscriptConfidence { get; private set; }
     public string? TurnId { get; private set; }
     public bool ReplyDone { get; private set; }
@@ -42,6 +45,7 @@ public sealed class BodyState
                 var tr = message.PayloadAs<TranscriptPayload>();
                 Transcript = tr.Text;
                 TranscriptConfidence = tr.Confidence;
+                TranscriptTyped = false;
                 ClearReply(null);       // a new utterance starts a new exchange
                 return true;
 
@@ -63,6 +67,16 @@ public sealed class BodyState
             default:
                 return false;
         }
+    }
+
+    /// <summary>You typed something (input.text): show it as the new exchange.
+    /// The Brain sends no transcript for typed input.</summary>
+    public void ApplyLocalInput(string text)
+    {
+        Transcript = text;
+        TranscriptConfidence = null;
+        TranscriptTyped = true;
+        ClearReply(null);
     }
 
     private void ClearReply(string? turnId)
