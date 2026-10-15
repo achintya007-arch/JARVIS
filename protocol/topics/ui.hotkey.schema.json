@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/ui.hotkey.schema.json",
+  "title": "ui.hotkey (command, Body -> Brain) payload",
+  "description": "A global hotkey was pressed on the Body. The Brain maps the name to an intent; push_to_talk maps to wake (tap-to-talk).",
+  "type": "object",
+  "required": ["name"],
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+  },
+  "additionalProperties": true
+}

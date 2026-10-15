@@ -15,6 +15,9 @@ public sealed record BodySettings
     public string Url { get; init; } = "ws://127.0.0.1:8765/bbp";
     public string? TokenPath { get; init; }
 
+    /// <summary>Global push-to-talk hotkey, e.g. "Ctrl+Alt+J" (Ctrl/Alt/Win + key).</summary>
+    public string Hotkey { get; init; } = "Ctrl+Alt+J";
+
     public static BodySettings Load()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "body.settings.json");

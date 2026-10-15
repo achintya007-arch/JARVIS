@@ -65,6 +65,7 @@ generated/
 
 # Local tooling / editor state
 .claude/settings.local.json
+.claude/worktrees/
 .vscode/
 .idea/
 

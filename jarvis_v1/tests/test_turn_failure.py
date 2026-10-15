@@ -89,6 +89,7 @@ def _text_brain(conversation):
     brain = Brain.__new__(Brain)
     brain._stopped = False
     brain._conversation = conversation
+    brain._turn_lock = asyncio.Lock()
     return brain
 
 

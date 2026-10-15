@@ -28,6 +28,9 @@ public sealed class BbpClientOptions
     /// <summary>Spec: three missed pongs means disconnected.</summary>
     public int MissedPongLimit { get; init; } = 3;
 
+    /// <summary>After a 4401, how often to check whether the token file changed.</summary>
+    public TimeSpan AuthRetryPollInterval { get; init; } = TimeSpan.FromSeconds(3);
+
     /// <summary>How long to wait for welcome after hello.</summary>
     public TimeSpan WelcomeTimeout { get; init; } = TimeSpan.FromSeconds(10);
 }
@@ -46,6 +49,7 @@ public sealed class BbpClient
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
     private readonly ReconnectPolicy _backoff = new();
     private readonly SemaphoreSlim _sendLock = new(1, 1);
+    private readonly SemaphoreSlim _reconnectSignal = new(0, 1);
     private IBbpSocket? _socket;
     private int _outstandingPings;
 
@@ -77,57 +81,118 @@ public sealed class BbpClient
     /// <summary>A message from the Brain that failed validation (dropped).</summary>
     public event Action<string>? ProtocolError;
 
-    /// <summary>Run until cancelled: connect, serve the session, back off, repeat.</summary>
+    /// <summary>
+    /// Run until cancelled: connect, serve the session, then react to how it
+    /// ended (spec close-code table):
+    ///   1000 / other codes / network drop → reconnect with normal backoff;
+    ///   4401 (bad token) → stop retrying until the token file changes or
+    ///        <see cref="Reconnect"/> is called;
+    ///   4408 (idle timeout) → reconnect immediately once, then normal backoff.
+    /// </summary>
     public async Task RunAsync(CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested)
+        var immediateUsed = false;
+        try
         {
-            var detail = "";
-            var authFailed = false;
-            var token = _options.TokenProvider();
-            if (token is null)
+            while (!ct.IsCancellationRequested)
             {
-                detail = "no token yet (start the Brain with bbp.enabled)";
-            }
-            else
-            {
-                SetState(ConnectionState.Connecting, _options.Url.ToString());
-                try
-                {
-                    await using var socket = await _factory.ConnectAsync(_options.Url, ct).ConfigureAwait(false);
-                    var welcomed = await RunSessionAsync(socket, token, ct).ConfigureAwait(false);
-                    if (welcomed)
-                        _backoff.Reset();
-                    authFailed = socket.CloseStatus == Protocol.CloseCodes.Auth;
-                    detail = socket.CloseStatus is { } code
-                        ? $"closed {code} {socket.CloseDescription}".TrimEnd()
-                        : "connection lost";
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (Exception e)
-                {
-                    detail = e.Message;
-                }
-            }
+                var token = _options.TokenProvider();
+                var attempt = token is null
+                    ? new Attempt(false, null, "no token yet (start the Brain with bbp.enabled)")
+                    : await AttemptAsync(token, ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
 
-            if (ct.IsCancellationRequested)
-                break;
-            var wait = _backoff.NextDelay();
-            SetState(authFailed ? ConnectionState.AuthFailed : ConnectionState.Disconnected,
-                     $"{detail} — retry in {wait.TotalSeconds:0.#} s");
-            try
-            {
-                await _delay(wait, ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
+                if (attempt.Welcomed)
+                {
+                    _backoff.Reset();
+                    immediateUsed = false;
+                }
+
+                if (attempt.CloseCode == Protocol.CloseCodes.Auth)
+                {
+                    SetState(ConnectionState.AuthFailed, "auth failed, check token");
+                    await WaitForAuthRetryAsync(token!, ct).ConfigureAwait(false);
+                    _backoff.Reset();
+                    continue;
+                }
+
+                if (attempt.CloseCode == Protocol.CloseCodes.HeartbeatTimeout && !immediateUsed)
+                {
+                    immediateUsed = true;
+                    SetState(ConnectionState.Disconnected, "idle timeout (4408), reconnecting now");
+                    continue;
+                }
+
+                var wait = _backoff.NextDelay();
+                SetState(ConnectionState.Disconnected, $"{attempt.Detail} — retry in {wait.TotalSeconds:0.#} s");
+                await WaitOrReconnectAsync(wait, ct).ConfigureAwait(false);
             }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // stopping
+        }
         SetState(ConnectionState.Disconnected, "stopped");
+    }
+
+    /// <summary>Retry now instead of waiting: after an auth failure (e.g. once
+    /// the token is fixed) or during a backoff wait. No effect while connected.</summary>
+    public void Reconnect()
+    {
+        if (State == ConnectionState.Connected)
+            return;
+        try { _reconnectSignal.Release(); }
+        catch (SemaphoreFullException) { }
+    }
+
+    private readonly record struct Attempt(bool Welcomed, int? CloseCode, string Detail);
+
+    private async Task<Attempt> AttemptAsync(string token, CancellationToken ct)
+    {
+        SetState(ConnectionState.Connecting, _options.Url.ToString());
+        try
+        {
+            await using var socket = await _factory.ConnectAsync(_options.Url, ct).ConfigureAwait(false);
+            var welcomed = await RunSessionAsync(socket, token, ct).ConfigureAwait(false);
+            var detail = socket.CloseStatus is { } code
+                ? $"closed {code} {socket.CloseDescription}".TrimEnd()
+                : "connection lost";
+            return new Attempt(welcomed, socket.CloseStatus, detail);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            return new Attempt(false, null, e.Message);
+        }
+    }
+
+    /// <summary>After 4401: don't hammer the Brain with a token it rejected. Wake
+    /// up when the token file holds a different token, or on Reconnect().</summary>
+    private async Task WaitForAuthRetryAsync(string rejectedToken, CancellationToken ct)
+    {
+        while (true)
+        {
+            if (await WaitOrReconnectAsync(_options.AuthRetryPollInterval, ct).ConfigureAwait(false))
+                return;
+            var current = _options.TokenProvider();
+            if (current is not null && current != rejectedToken)
+                return;
+        }
+    }
+
+    /// <summary>Wait for <paramref name="delay"/>; true if Reconnect() cut it short.</summary>
+    private async Task<bool> WaitOrReconnectAsync(TimeSpan delay, CancellationToken ct)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var signal = _reconnectSignal.WaitAsync(linked.Token);
+        var timer = _delay(delay, linked.Token);
+        var first = await Task.WhenAny(signal, timer).ConfigureAwait(false);
+        await linked.CancelAsync().ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        return first == signal && signal.IsCompletedSuccessfully;
     }
 
     /// <summary>Send a command; returns its id (responses carry it as corr).

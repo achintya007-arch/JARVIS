@@ -7,9 +7,20 @@
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
         FontFamily="Segoe UI" Foreground="#E8EEF2"
         MouseLeftButtonDown="OnDrag" Loaded="OnLoaded">
-    <Border CornerRadius="12" Background="#E6101418" BorderBrush="#4400C8E6" BorderThickness="1" Padding="14,10,14,12">
+    <Window.Resources>
+        <!-- Collapse a TextBlock while its text is empty. -->
+        <Style x:Key="HideWhenEmpty" TargetType="TextBlock">
+            <Style.Triggers>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+    <Border CornerRadius="12" Background="#F0101418" BorderBrush="#4400C8E6" BorderThickness="1" Padding="14,10,14,12">
         <Border.ContextMenu>
             <ContextMenu>
+                <MenuItem Header="Hide HUD (tray icon brings it back)" Click="OnHide" />
                 <MenuItem Header="Quit JARVIS Body" Click="OnQuit" />
             </ContextMenu>
         </Border.ContextMenu>
@@ -22,32 +33,38 @@
             </DockPanel>
             <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#8A939B" Margin="17,2,0,0" TextTrimming="CharacterEllipsis" />
 
-            <!-- Last thing heard, then the streaming reply -->
+            <!-- Last thing heard (or typed), then the streaming reply -->
             <TextBlock Text="{Binding Transcript}" FontSize="13" Foreground="#A9C7D6" FontStyle="Italic"
-                       TextWrapping="Wrap" Margin="0,10,0,0">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock">
-                        <Style.Triggers>
-                            <Trigger Property="Text" Value="">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
+                       TextWrapping="Wrap" Margin="0,10,0,0" Style="{StaticResource HideWhenEmpty}" />
             <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto" Margin="0,6,0,0">
-                <TextBlock Text="{Binding Reply}" FontSize="14" TextWrapping="Wrap" LineHeight="20">
+                <TextBlock Text="{Binding Reply}" FontSize="14" TextWrapping="Wrap" LineHeight="20"
+                           Style="{StaticResource HideWhenEmpty}" />
+            </ScrollViewer>
+
+            <!-- Transient notice: refused command, hotkey unavailable… (click to dismiss) -->
+            <TextBlock Text="{Binding Notice}" FontSize="12" Foreground="#F5B731" TextWrapping="Wrap"
+                       Margin="0,8,0,0" Cursor="Hand" MouseLeftButtonDown="OnNoticeClick"
+                       Style="{StaticResource HideWhenEmpty}" />
+
+            <!-- Typed input → input.text -->
+            <Grid Margin="0,10,0,0">
+                <TextBox x:Name="Input" FontSize="13" Padding="8,5" Background="#1C232A" Foreground="#E8EEF2"
+                         BorderBrush="#33445566" CaretBrush="#E8EEF2" MaxLength="4000"
+                         IsEnabled="{Binding IsConnected}" KeyDown="OnInputKeyDown" />
+                <TextBlock Text="Type to JARVIS and press Enter" FontSize="13" Foreground="#5E6870"
+                           Margin="11,5,0,0" IsHitTestVisible="False">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
                             <Style.Triggers>
-                                <Trigger Property="Text" Value="">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                </Trigger>
+                                <DataTrigger Binding="{Binding Text, ElementName=Input}" Value="">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </TextBlock.Style>
                 </TextBlock>
-            </ScrollViewer>
+            </Grid>
         </StackPanel>
     </Border>
 </Window>

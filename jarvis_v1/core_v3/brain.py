@@ -26,6 +26,7 @@ from cognition.goal_manager import GoalManager
 from cognition.llm_client import LLMClient
 from core.config import Config
 from core_v3.adapters import ResourceAdapter
+from core_v3.adapters.bbp_commands import BBPCommands
 from core_v3.adapters.bbp_server import BBPServer
 from core_v3.conversation import TURN_FAILED_REPLY, ConversationEngine
 from core_v3.event_bus import EventBus
@@ -50,6 +51,7 @@ class Brain:
         self._bus = EventBus()
         self._stopped = False
         self._stop_event = asyncio.Event()
+        self._turn_lock = asyncio.Lock()     # text mode: one turn at a time (stdin or Body)
         self._orchestrator: VoiceOrchestrator | None = None
 
         # ── Infrastructure / cognition (unchanged) ─────────────────────────
@@ -118,6 +120,11 @@ class Brain:
         self._bbp: BBPServer | None = None
         if config.bbp.enabled:
             self._bbp = BBPServer(config.bbp, self._bus, self._bbp_snapshot)
+            BBPCommands(
+                orchestrator=self._orchestrator, conversation=self._conversation,
+                config=config.bbp, turn_lock=self._turn_lock,
+                voice_active=lambda: getattr(self.config, "mode", "wake") != "text",
+            ).register(self._bbp)
 
     # Late-bound executor callbacks → orchestrator.
     async def _speak_cb(self, text: str) -> None:
@@ -197,9 +204,10 @@ class Brain:
             # If JARVIS's previous reply was a question, a short answer ("yes")
             # is a reply to it, not low-signal noise.
             try:
-                async for sentence in self._conversation.respond(text, followup=asked_question):
-                    last = sentence
-                    print(f"JARVIS: {sentence}", flush=True)
+                async with self._turn_lock:  # a Body's input.text waits its turn (E_BUSY)
+                    async for sentence in self._conversation.respond(text, followup=asked_question):
+                        last = sentence
+                        print(f"JARVIS: {sentence}", flush=True)
             except Exception as e:      # a failed turn must not end the session
                 log.error("text turn failed: %s", e, exc_info=True)
                 last = TURN_FAILED_REPLY

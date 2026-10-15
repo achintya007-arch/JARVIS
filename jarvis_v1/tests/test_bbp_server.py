@@ -207,7 +207,8 @@ class TestEvents:
         await harness.server.stop()
         with pytest.raises(ConnectionClosed):
             await asyncio.wait_for(ws.recv(), 2.0)
-        assert ws.close_code == 1001
+        assert ws.close_code == 1000                          # spec: brain shutting down
+        assert ws.close_reason == "brain shutting down"
         assert not harness.bus._handlers[VoiceStateChanged]
 
 

@@ -8,6 +8,7 @@ into Brain actions (milestone 2+). It owns no cognition.
   Body → hello{token}      Brain → welcome{snapshot}     (bad token: close 4401)
   Body → ping (every 5 s)  Brain → pong                   (silent > timeout: close 4408)
   Brain → voice.state / voice.transcript / reply.chunk / reply.done  (events)
+  Body → input.text / voice.control / ui.hotkey (commands; see bbp_commands.py)
 
 Fail-safe by construction: the server is optional (bbp.enabled), a failed
 start only logs, every Body has its own bounded send queue (a stalled Body is
@@ -40,8 +41,9 @@ from core_v3.events import ReplyChunk, ReplyDone, TranscriptReady, VoiceStateCha
 log = logging.getLogger("jarvis.bbp")
 
 BRAIN_VERSION = "3.0"
+CLOSE_NORMAL = 1000               # spec: Brain shutting down
 CLOSE_AUTH = 4401                 # spec: bad or missing token
-CLOSE_HEARTBEAT = 4408            # nothing received within heartbeat_timeout_s
+CLOSE_HEARTBEAT = 4408            # spec: idle timeout (nothing received for heartbeat_timeout_s)
 _SEND_QUEUE_MAX = 512             # per-Body backlog before we drop the Body
 _JARVIS_DIR = Path(__file__).resolve().parents[2]      # …/jarvis_v1
 
@@ -129,6 +131,7 @@ class BBPServer:
         self._token = ""
         self._clients: set[BodyConnection] = set()
         self._commands: dict[str, CommandHandler] = {}
+        self._tasks: set[asyncio.Task] = set()      # in-flight command handlers
         self._subscriptions = [
             (VoiceStateChanged, self._on_voice_state),
             (TranscriptReady, self._on_transcript),
@@ -162,9 +165,18 @@ class BBPServer:
     async def stop(self) -> None:
         for event_type, handler in self._subscriptions:
             self._bus.unsubscribe(event_type, handler)
+        for task in list(self._tasks):
+            task.cancel()
+        await asyncio.gather(*self._tasks, return_exceptions=True)
         if self._server is None:
             return
-        self._server.close()                 # closes every Body with 1001 (going away)
+        # Spec close-code table: 1000 = Brain shutting down (Bodies reconnect
+        # with normal backoff). server.close() alone would send 1001.
+        await asyncio.gather(
+            *(c.ws.close(CLOSE_NORMAL, "brain shutting down") for c in list(self._clients)),
+            return_exceptions=True,
+        )
+        self._server.close()
         try:
             await asyncio.wait_for(self._server.wait_closed(), timeout=3.0)
         except asyncio.TimeoutError:
@@ -276,7 +288,7 @@ class BBPServer:
                 raw = await asyncio.wait_for(client.ws.recv(), timeout=timeout)
             except asyncio.TimeoutError:
                 log.warning("BBP: %s silent for %.0f s — closing", client.client, timeout)
-                await client.ws.close(CLOSE_HEARTBEAT, "heartbeat timeout")
+                await client.ws.close(CLOSE_HEARTBEAT, "idle timeout")
                 return
             except ConnectionClosed:
                 return
@@ -309,8 +321,23 @@ class BBPServer:
         except bbp.BBPError as e:
             client.send(bbp.error_response(message["id"], e.code, e.message))
             return
+        # Run as a task: a long command (input.text streams a whole reply) must
+        # never stall this Body's reader, or its pings would go unread → 4408.
+        task = asyncio.get_running_loop().create_task(self._run_command(client, handler, message))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
+    async def _run_command(self, client: BodyConnection, handler: CommandHandler,
+                           message: dict[str, Any]) -> None:
+        """A handler refuses a command by raising BBPError (E_BUSY, E_NOT_ALLOWED,
+        …); the Body gets an error response. Accepted commands get no response."""
         try:
             await handler(client, message)
+        except bbp.BBPError as e:
+            log.info("BBP: %s refused: %s", message["topic"], e)
+            client.send(bbp.error_response(message["id"], e.code, e.message))
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             log.error("BBP: command %s failed: %s", message["topic"], e, exc_info=True)
 

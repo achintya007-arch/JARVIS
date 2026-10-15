@@ -14,6 +14,11 @@ Concurrency model (no blocking pipeline):
 The wake word is required again after each turn (returns to IDLE). An
 "active conversation mode" could later skip the IDLE→wake step without touching
 the rest of the machine.
+
+Body controls (Brain–Body Protocol): request_wake() skips the wake word (or
+barges in while speaking), request_text() runs a typed turn through the same
+loop, cancel_turn() stops the current turn, set_muted() closes the microphone.
+Each turn runs as its own task so it can be cancelled from outside.
 """
 
 from __future__ import annotations
@@ -44,6 +49,13 @@ _STOP_ONLY_RE = re.compile(
 )
 
 
+class _WakeRequest:
+    """Queued into the wake detector's frame queue to wake it without audio."""
+
+
+_WAKE = _WakeRequest()
+
+
 def _time_of_day(now: datetime) -> str:
     h = now.hour
     return "morning" if h < 12 else "afternoon" if h < 17 else "evening"
@@ -70,6 +82,11 @@ class VoiceOrchestrator:
         self._confirming = False          # suppresses barge-in during confirmation
         self._last_sentence = ""          # last spoken sentence (follow-up detection)
         self._muted = False               # microphone off (BBP voice.control mute)
+        self._wake_q: asyncio.Queue | None = None    # live while waiting for the wake word
+        self._wake_pending = False        # a _WAKE is queued (never queue two)
+        self._pending_text: tuple[str, bool] | None = None   # typed turn: (text, speak)
+        self._turn: asyncio.Task | None = None
+        self._barge_event = asyncio.Event()   # Body push-to-talk while SPEAKING
 
         # Observability: publish voice facts on the bus (BBP voice.state /
         # voice.transcript). Optional — nothing here depends on a subscriber.
@@ -113,30 +130,69 @@ class VoiceOrchestrator:
                 q = await self._await_wake()
                 if not self._running:
                     break
+                if self._pending_text is not None:
+                    text, speak = self._pending_text
+                    self._pending_text = None
+                    if q is not None:
+                        self._mic.unsubscribe(q)
+                    await self._run_turn(self._text_turn(text, speak))
+                    continue
                 # Chime plays WITHOUT blocking capture, and we keep the SAME mic
                 # subscription straight into LISTENING — so a command spoken right
                 # after the wake word ("hey jarvis, open Chrome") isn't clipped.
                 if self._cfg.chime_on_wake:
                     asyncio.create_task(self._chime())
-                await self._conversation_turn(initial_q=q)
+                await self._run_turn(self._conversation_turn(initial_q=q))
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 log.error("voice loop error: %s", e, exc_info=True)
                 self.state.transition(VoiceState.IDLE)
 
+    async def _run_turn(self, coro) -> None:
+        """Run one turn as a task so cancel_turn() can stop it. A cancelled turn
+        just ends (back to IDLE); a failed one propagates to run()'s handler."""
+        turn = asyncio.create_task(coro)
+        self._turn = turn
+        try:
+            await asyncio.wait({turn})
+        except asyncio.CancelledError:
+            turn.cancel()
+            await asyncio.gather(turn, return_exceptions=True)
+            raise
+        finally:
+            self._turn = None
+        if turn.cancelled():
+            log.info("turn cancelled")
+            return
+        exc = turn.exception()
+        if exc is not None:
+            raise exc
+
     async def _await_wake(self) -> asyncio.Queue | None:
         """Wait for the wake word. Returns the LIVE mic subscription (still
         receiving frames) so the caller can capture the command with no gap."""
         self.state.transition(VoiceState.IDLE)
-        if not self._wake.available:
+        if not self._wake.available and not self._muted:
             # No wake model: wait briefly and treat silence as no-op (text mode
             # should be used instead). Avoids a hot loop.
             await asyncio.sleep(0.5)
             return None
-        self._wake.reset()
+        if self._wake.available:
+            self._wake.reset()
         q = self._mic.subscribe()
-        print('\n[JARVIS] Idle — say "hey jarvis"\n', flush=True)
+        self._wake_q = q
+        try:
+            return await self._wake_loop(q)
+        finally:
+            self._wake_q = None
+            self._wake_pending = False
+
+    async def _wake_loop(self, q: asyncio.Queue) -> asyncio.Queue | None:
+        if self._muted:
+            print("\n[JARVIS] Idle (microphone muted)\n", flush=True)
+        else:
+            print('\n[JARVIS] Idle — say "hey jarvis"\n', flush=True)
         # Instrumentation: every ~4s report frames seen + peak score, so if wake
         # never fires we can tell whether frames are arriving (mic/loop healthy)
         # and how close the score got (threshold tuning) vs. a dead stream.
@@ -145,6 +201,14 @@ class VoiceOrchestrator:
         last_report = time.perf_counter()
         while self._running:
             frame = await q.get()
+            if frame is _WAKE:
+                log.info("wake requested by the Body")
+                return q
+            if self._muted:
+                continue                    # mic closed; only Body requests get through
+            if not self._wake.available:
+                self._mic.unsubscribe(q)    # unmuted with no wake model: old fallback
+                return None
             frames += 1
             score = self._wake.score(frame)
             peak = max(peak, score)
@@ -167,6 +231,12 @@ class VoiceOrchestrator:
         preroll: list | None = None
         followup = False        # True while waiting for the answer to JARVIS's question
         while self._running:
+            if self._muted:
+                # Microphone closed (mute arrived mid-turn): no listening.
+                if initial_q is not None:
+                    self._mic.unsubscribe(initial_q)
+                log.info("microphone muted → idle")
+                return
             # LISTENING — reuse the live wake subscription for the FIRST capture
             # (no gap → no clipped command onset); fresh subscription afterward.
             self.state.transition(VoiceState.LISTENING)
@@ -248,8 +318,10 @@ class VoiceOrchestrator:
         Returns the interrupting frames if the user barged in, else None."""
         self.state.transition(VoiceState.SPEAKING)
         self._last_sentence = ""
+        self._barge_event.clear()
         produce = asyncio.create_task(self._produce_speech(text, followup=followup))
         playback = asyncio.create_task(self._await_playback(produce))
+        manual = asyncio.create_task(self._barge_event.wait())    # Body push-to-talk
 
         monitor = None
         monitor_q = None
@@ -258,9 +330,16 @@ class VoiceOrchestrator:
             monitor_q = self._mic.subscribe()
             monitor = asyncio.create_task(self._monitor_barge_in(monitor_q))
 
-        waiters = {playback} | ({monitor} if monitor else set())
+        waiters = {playback, manual} | ({monitor} if monitor else set())
         try:
             done, _ = await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
+            if manual in done and playback not in done:
+                log.info("barge-in (Body push-to-talk) → interrupting speech")
+                self._player.interrupt()
+                produce.cancel()
+                playback.cancel()
+                await asyncio.gather(produce, playback, return_exceptions=True)
+                return []
             if monitor is not None and monitor in done and monitor.result() is not None:
                 # Barge-in: stop everything immediately.
                 self._player.interrupt()
@@ -271,10 +350,11 @@ class VoiceOrchestrator:
             # Completed normally.
             return None
         finally:
-            for t in (monitor, produce, playback):
+            for t in (monitor, produce, playback, manual):
                 if t is not None and not t.done():
                     t.cancel()
-            await asyncio.gather(*[t for t in (monitor, produce, playback) if t], return_exceptions=True)
+            await asyncio.gather(*[t for t in (monitor, produce, playback, manual) if t],
+                                 return_exceptions=True)
             if monitor_q is not None:
                 self._mic.unsubscribe(monitor_q)
 
@@ -327,6 +407,80 @@ class VoiceOrchestrator:
             if self._wake.triggered(frame):
                 log.info("barge-in (wake word) → interrupting speech")
                 return []
+
+    # ── Body controls (BBP voice.control / ui.hotkey / input.text) ─────────────
+    def request_wake(self) -> str:
+        """Skip the wake word. Returns what happened: "wake" (now listening),
+        "barge_in" (was speaking: interrupt and listen), "listening" (already
+        was), or "busy" (mid-turn, nothing to do)."""
+        st = self.state.state
+        if st is VoiceState.IDLE and self._wake_q is not None:
+            if not self._wake_pending:
+                self._wake_pending = True
+                self._wake_q.put_nowait(_WAKE)
+            return "wake"
+        if st is VoiceState.SPEAKING:
+            self._barge_event.set()
+            return "barge_in"
+        if st is VoiceState.LISTENING:
+            return "listening"
+        return "busy"
+
+    def request_text(self, text: str, *, speak: bool = False) -> bool:
+        """Run a typed turn through the voice loop (so it never overlaps a voice
+        turn). The reply streams as reply.* events; it is spoken only if
+        `speak`. False when JARVIS is mid-turn (the caller answers E_BUSY)."""
+        if (not self.state.is_(VoiceState.IDLE) or self._wake_q is None
+                or self._wake_pending or self._pending_text is not None):
+            return False
+        self._pending_text = (text, speak)
+        self._wake_pending = True
+        self._wake_q.put_nowait(_WAKE)
+        return True
+
+    async def _text_turn(self, text: str, speak: bool) -> None:
+        print(f"[Typed] {text}", flush=True)
+        self.state.transition(VoiceState.PROCESSING)
+        if not speak:
+            async for _sentence in self._conversation.respond(text):
+                pass                        # reply.* events carry it to the HUD
+            return
+        barge = await self._speak_response(text)
+        if barge is not None:
+            self.state.transition(VoiceState.INTERRUPTED)
+            await self._conversation_turn()     # barge-in: listen for the new command
+
+    def cancel_turn(self) -> bool:
+        """Stop the current turn (listening, thinking or speaking) and return to
+        IDLE. False if there was nothing to cancel."""
+        turn = self._turn
+        if turn is None or turn.done():
+            return False
+        self._player.interrupt()
+        if self.state.is_(VoiceState.LISTENING):
+            self.state.transition(VoiceState.IDLE)
+        elif not self.state.is_(VoiceState.IDLE):
+            self.state.transition(VoiceState.INTERRUPTED)
+        turn.cancel()
+        return True
+
+    async def set_muted(self, muted: bool) -> None:
+        """Microphone off/on. Muting closes the input stream (the OS mic
+        indicator goes off), abandons any capture in progress and disables the
+        wake word; typed input keeps working. A reply already being spoken
+        finishes. Raises if the mic can't be reopened (stays muted)."""
+        if muted == self._muted:
+            return
+        if muted:
+            self._muted = True
+            if self.state.is_(VoiceState.LISTENING):
+                self.cancel_turn()
+            await self._mic.stop()
+        else:
+            await self._mic.start()
+            self._muted = False
+        log.info("microphone %s", "muted" if muted else "unmuted")
+        self._publish(VoiceStateChanged(state=self.state.state.value.lower(), muted=self._muted))
 
     # ── Callbacks for AgentExecutor (speak / fail-closed confirm) ──────────────
     async def speak(self, text: str) -> None:

@@ -43,6 +43,9 @@ internal sealed class FakeSocket : IBbpSocket
         _inbound.Writer.TryWrite(null);
     }
 
+    /// <summary>The TCP connection dies: no close frame, no close code.</summary>
+    public void Drop() => _inbound.Writer.TryWrite(null);
+
     public Task CloseAsync(int code, string reason, CancellationToken ct)
     {
         CloseStatus ??= code;

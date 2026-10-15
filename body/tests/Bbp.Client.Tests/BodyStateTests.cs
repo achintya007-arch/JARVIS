@@ -114,3 +114,20 @@ public class TokenLocatorTests
         }
     }
 }
+
+public class TypedInputTests
+{
+    [Fact]
+    public void LocalInput_StartsANewExchange_MarkedTyped()
+    {
+        var s = new BodyState();
+        s.Apply(Brain.Event("reply.chunk", new ReplyChunkPayload("t1", 0, "Old.")));
+        s.ApplyLocalInput("add milk to my list");
+        Assert.Equal("add milk to my list", s.Transcript);
+        Assert.True(s.TranscriptTyped);
+        Assert.Equal("", s.Reply);
+
+        s.Apply(Brain.Event("voice.transcript", new TranscriptPayload("hello", true, 0.8)));
+        Assert.False(s.TranscriptTyped);
+    }
+}

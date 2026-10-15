@@ -6,7 +6,7 @@
 .\run.ps1              # V3 (vault brain), voice
 .\run.ps1 -Text        # V3, keyboard input (no mic needed) — easiest for a first check
 .\run.ps1 -V2          # V2 (stable brain)
-.\run.ps1 -Test        # run the automated test suite (111 tests)
+.\run.ps1 -Test        # run the automated test suite (305 tests)
 .\run.ps1 -VoiceTest   # A/B test TTS voice/rate/pitch without the full pipeline
 ```
 
@@ -19,8 +19,10 @@ With `bbp: {enabled: true}` in `config.yaml`, the Brain serves
 python -m tools.bbp_probe              # prints welcome snapshot + every event
 python -m tools.bbp_probe --raw        # full JSON envelopes
 python -m tools.bbp_probe --token bad  # should close with 4401
-cd ..ody; dotnet test; dotnet run --project src\Jarvis.Body
+cd ..\body; dotnet test; dotnet run --project src\Jarvis.Body
 ```
+
+With the HUD running: type in its box and press Enter (the reply shows on the HUD and is not spoken). Press Ctrl+Alt+J and speak (push-to-talk). Right-click the tray icon to mute or unmute: the HUD shows "muted", and Ctrl+Alt+J is then refused with a notice. The Body log is %LOCALAPPDATA%\JARVIS\body.log.
 
 ### Tuning the voice
 
