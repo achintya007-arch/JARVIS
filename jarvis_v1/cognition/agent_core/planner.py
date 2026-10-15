@@ -586,15 +586,14 @@ SCREEN_TOOL_SCHEMAS = [
         "function": {
             "name": "open_app",
             "description": (
-                "Launch an application by name. "
-                "Supports: chrome, firefox, notepad, explorer, calculator, cmd, "
-                "powershell, vscode, spotify, discord, word, excel, outlook, paint, "
-                "terminal, or any executable name/path."
+                "Launch an allowed application by name. Only these work: chrome, "
+                "firefox, notepad, explorer, calculator, paint, task manager, vscode, "
+                "spotify, discord, todoist, word, excel, outlook. Anything else is refused."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Application name or path"},
+                    "name": {"type": "string", "description": "One of the allowed application names"},
                 },
                 "required": ["name"],
             },

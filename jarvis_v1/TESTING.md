@@ -6,7 +6,7 @@
 .\run.ps1              # V3 (vault brain), voice
 .\run.ps1 -Text        # V3, keyboard input (no mic needed) — easiest for a first check
 .\run.ps1 -V2          # V2 (stable brain)
-.\run.ps1 -Test        # run the automated test suite (315 tests)
+.\run.ps1 -Test        # run the automated test suite (382 tests)
 .\run.ps1 -VoiceTest   # A/B test TTS voice/rate/pitch without the full pipeline
 ```
 

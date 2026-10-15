@@ -82,15 +82,17 @@ class FastRouter:
         (re.compile(r"\bvs\s+studio\b",               re.IGNORECASE), "vscode"),
     ]
 
-    # ── Desktop app table: keyword → (Windows command, spoken name) ───────────
+    # ── Desktop app table: keyword → (app_launcher allowlist key, spoken name) ─
+    # Only keys from action/app_launcher.ALLOWED_APPS; the executor resolves them
+    # to absolute paths and launches without a shell.
     _APP_MAP: dict[str, tuple[str, str]] = {
-        "chrome":     ("start chrome",                                        "Chrome"),
-        "notepad":    ("notepad",                                             "Notepad"),
-        "calculator": ("calc",                                                "Calculator"),
-        "todoist":    (r'start "" "%LOCALAPPDATA%\Todoist\Todoist.exe"',      "Todoist"),
-        "spotify":    ("start spotify",                                       "Spotify"),
-        "vscode":     ("code",                                                "VS Code"),
-        "discord":    ("start discord",                                       "Discord"),
+        "chrome":     ("chrome",     "Chrome"),
+        "notepad":    ("notepad",    "Notepad"),
+        "calculator": ("calculator", "Calculator"),
+        "todoist":    ("todoist",    "Todoist"),
+        "spotify":    ("spotify",    "Spotify"),
+        "vscode":     ("vscode",     "VS Code"),
+        "discord":    ("discord",    "Discord"),
     }
 
     # ── URL table: keyword → (URL, spoken name) ───────────────────────────────
@@ -336,8 +338,8 @@ class FastRouter:
 
         # Bare target — handles compound split arms with no verb (e.g. "spotify", "notepad")
         if text in self._APP_MAP:
-            cmd, name = self._APP_MAP[text]
-            return RouteResult(tool="open_app", args={"command": cmd, "name": name})
+            app, name = self._APP_MAP[text]
+            return RouteResult(tool="open_app", args={"app": app, "name": name})
         if text in self._URL_MAP:
             url, name = self._URL_MAP[text]
             return RouteResult(tool="open_url", args={"url": url, "name": name})
@@ -352,8 +354,8 @@ class FastRouter:
                 url, name = self._URL_MAP[target]
                 return RouteResult(tool="open_url", args={"url": url, "name": name})
             if target in self._APP_MAP:
-                cmd, name = self._APP_MAP[target]
-                return RouteResult(tool="open_app", args={"command": cmd, "name": name})
+                app, name = self._APP_MAP[target]
+                return RouteResult(tool="open_app", args={"app": app, "name": name})
             # "play <X> [on youtube]" → YouTube search for X (can't autoplay a
             # specific video, but opens the results). Only for the "play" verb.
             if verb == "play":
@@ -361,9 +363,9 @@ class FastRouter:
                 if q:
                     return self._youtube_search(q)
             # Fuzzy substring for open/launch/start ("open google chrome" → chrome).
-            for key, (cmd, name) in self._APP_MAP.items():
+            for key, (app, name) in self._APP_MAP.items():
                 if key in target:
-                    return RouteResult(tool="open_app", args={"command": cmd, "name": name})
+                    return RouteResult(tool="open_app", args={"app": app, "name": name})
             for key, (url, name) in self._URL_MAP.items():
                 if key in target:
                     return RouteResult(tool="open_url", args={"url": url, "name": name})

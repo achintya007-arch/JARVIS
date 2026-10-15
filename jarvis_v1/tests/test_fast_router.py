@@ -24,7 +24,7 @@ class TestRouting:
 
     def test_launch_app(self):
         res = r().route("open chrome")
-        assert res.tool == "open_app" and "chrome" in res.args["command"]
+        assert res.tool == "open_app" and res.args["app"] == "chrome"
 
     def test_launch_url(self):
         res = r().route("open youtube")
@@ -75,7 +75,7 @@ class TestWakeStrip:
 
     def test_hey_jarvis_stripped(self):
         res = r().route("hey jarvis open chrome")
-        assert res.tool == "open_app" and "chrome" in res.args["command"]
+        assert res.tool == "open_app" and res.args["app"] == "chrome"
 
 
 class TestCompound:

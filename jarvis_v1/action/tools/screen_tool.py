@@ -9,7 +9,7 @@ Tools exposed to the LLM:
   click             — click at (x, y) or on text found via locateOnScreen
   type_text         — type a string at current cursor position
   hotkey            — send a keyboard shortcut e.g. ctrl+c
-  open_app          — launch an application by name
+  open_app          — launch an allowlisted application (action/app_launcher.py)
   focus_window      — bring a window to foreground by title substring
   list_windows      — list all open window titles
   move_mouse        — move mouse to (x, y) without clicking
@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from pathlib import Path
 
 log = logging.getLogger("jarvis.screen")
@@ -65,26 +64,6 @@ def active_window_title() -> str:
     except Exception:
         return ""
 
-
-# ── Known application paths (Windows) ─────────────────────────────────────────
-_APP_MAP: dict[str, str] = {
-    "chrome":      "chrome",
-    "firefox":     "firefox",
-    "notepad":     "notepad",
-    "explorer":    "explorer",
-    "calculator":  "calc",
-    "cmd":         "cmd",
-    "powershell":  "powershell",
-    "vscode":      "code",
-    "code":        "code",
-    "spotify":     r"%APPDATA%\Spotify\Spotify.exe",
-    "discord":     r"%LOCALAPPDATA%\Discord\Update.exe --processStart Discord.exe",
-    "task manager":"taskmgr",
-    "paint":       "mspaint",
-    "word":        "winword",
-    "excel":       "excel",
-    "outlook":     "outlook",
-}
 
 # ── Screenshot save dir ────────────────────────────────────────────────────────
 _SCREENSHOT_DIR = Path("data/screenshots")
@@ -337,24 +316,12 @@ class ScreenTool:
     # ── App launcher ──────────────────────────────────────────────────────────
 
     async def open_app(self, name: str) -> str:
-        """
-        Launch an application by common name or full path.
-        Falls back to os.startfile if not in the known map.
-        """
-        import subprocess
+        """Launch an allowlisted app by name (action/app_launcher.py). Raises
+        AppNotAllowed for anything else; never runs a shell or a raw name."""
+        from action import app_launcher
 
-        def _open() -> str:
-            key = name.lower().strip()
-            cmd = _APP_MAP.get(key, name)
-            # Expand environment variables (e.g. %APPDATA%)
-            cmd = os.path.expandvars(cmd)
-            try:
-                subprocess.Popen(cmd, shell=True)
-                return f"Launched {name}."
-            except Exception as e:
-                return f"Could not launch {name}: {e}"
-
-        return await asyncio.to_thread(_open)
+        display = await asyncio.to_thread(app_launcher.launch, name)
+        return f"Launched {display}."
 
     async def close_app(self, name: str) -> str:
         """Kill a process by name. e.g. close_app('notepad.exe')"""
@@ -379,34 +346,29 @@ class ScreenTool:
         self._require()
 
         def _copy() -> str:
-            pyautogui.hotkey("ctrl", "c")
             import time
+
+            import pyperclip
+            pyautogui.hotkey("ctrl", "c")
             time.sleep(0.15)
             try:
-                import subprocess
-                result = subprocess.run(
-                    ["powershell", "-command", "Get-Clipboard"],
-                    capture_output=True, text=True, timeout=3
-                )
-                return result.stdout.strip()[:2000] or "(clipboard empty)"
-            except Exception:
+                return pyperclip.paste().strip()[:2000] or "(clipboard empty)"
+            except pyperclip.PyperclipException:
                 return "(clipboard contents unavailable)"
 
         return await asyncio.to_thread(_copy)
 
     async def paste_text(self, text: str) -> str:
-        """Set clipboard content and paste it."""
+        """Put text on the clipboard and paste it.
+
+        SECURITY: the clipboard is set through the Win32 clipboard API
+        (pyperclip → OpenClipboard/SetClipboardData). The text is data; it is
+        never interpolated into a PowerShell or shell command."""
         self._require()
 
         def _paste() -> str:
-            try:
-                import subprocess
-                subprocess.run(
-                    ["powershell", "-command", f"Set-Clipboard -Value '{text}'"],
-                    capture_output=True, timeout=3
-                )
-            except Exception:
-                pass
+            import pyperclip
+            pyperclip.copy(text)
             pyautogui.hotkey("ctrl", "v")
             return f"Pasted {len(text)} characters."
 

@@ -77,6 +77,7 @@ jarvis_v1/
 │
 ├── action/
 │   ├── fast_router.py      # Deterministic fast-path for common commands
+│   ├── app_launcher.py     # THE app allowlist: name → absolute path → argv, never a shell
 │   ├── agent_executor.py   # Tool dispatcher — shell allowlist, FS sandbox,
 │   │                       #   fail-closed confirmation (security boundary)
 │   ├── obsidian_tools.py   # Read/write helpers for the Obsidian vault
@@ -99,10 +100,11 @@ jarvis_v1/
 │   ├── build_web_index.py  # Builds the FineWeb web-knowledge index
 │   └── fineweb_pipeline.py # FineWeb-Edu download + content filtering
 │
-├── tests/                  # pytest suite — 315 tests, no GPU/Ollama needed
+├── tests/                  # pytest suite — 382 tests, no GPU/Ollama needed
 │   ├── conftest.py
 │   ├── test_security.py        # shell allowlist / sandbox / confirmation
 │   ├── test_fast_router.py / test_hot_path.py
+│   ├── test_injection.py      # open_app / paste_text injection payloads + canaries
 │   ├── test_agent_state.py / test_resource_alerts.py
 │   ├── test_vault.py / test_vault_goals.py / test_obsidian_tools.py
 │   ├── test_voice_*.py         # V3 voice: endpoint, player, state, orchestrator
@@ -119,7 +121,8 @@ jarvis_v1/
 │   ├── mic_smoke.py        # -MicSmoke: V3 end-to-end voice + latency
 │   ├── mic_check.py        # -MicCheck: V2 speech-capture diagnostic
 │   ├── voice_test.py       # -VoiceTest: TTS voice/rate/pitch A/B tester
-│   └── bbp_probe.py        # fake Body: prints every BBP event (python -m tools.bbp_probe)
+│   ├── bbp_probe.py        # fake Body: prints every BBP event (python -m tools.bbp_probe)
+│   └── desktop_bench.py    # desktop-tool success rate + latency against real apps
 │
 └── docs/
     ├── JARVIS_Design_Document_v0.1.md

