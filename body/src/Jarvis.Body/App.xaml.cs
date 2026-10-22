@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using Bbp.Client;
+using Jarvis.Desktop;
 
 namespace Jarvis.Body;
 
@@ -13,6 +14,7 @@ public partial class App : Application
     private MainWindow? _window;
     private TrayIcon? _tray;
     private GlobalHotkey? _hotkey;
+    private FlaUiReader? _uiReader;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -40,9 +42,18 @@ public partial class App : Application
             Url = new Uri(settings.Url),
             TokenProvider = settings.ReadToken,
             ClientName = "win-shell",
-            ClientVersion = "0.2.0",
-            Capabilities = ["hud", "hotkey"],
+            ClientVersion = "0.3.0",
+            Capabilities = ["hud", "hotkey", .. DesktopService.Capabilities],
         }, validator);
+
+        // Desktop control (BBP desktop.*), gated by the Body's own allowlist.
+        var (allowlist, allowlistProblem) = DesktopAllowlist.Load(
+            Path.Combine(AppContext.BaseDirectory, DesktopAllowlist.FileName));
+        BodyLog.Write(allowlistProblem ?? $"desktop allowlist: {allowlist.Apps.Count} apps");
+        _uiReader = new FlaUiReader();
+        new DesktopService(allowlist, new Win32WindowSystem(), new ProcessLauncher(), new CoreAudioVolume(),
+                           _uiReader, BodyLog.Write).Register(client);
+        client.RequestHandled += (topic, outcome, ms) => BodyLog.Write($"request {topic}: {outcome} in {ms:0} ms");
 
         // Client events arrive on worker threads; the view model lives on the UI thread.
         client.StateChanged += (state, detail) =>
@@ -71,6 +82,8 @@ public partial class App : Application
         window.IsVisibleChanged += (_, _) => tray.Update(vm.TrayStatus, window.IsVisible);
 
         window.SourceInitialized += (_, _) => RegisterHotkey(settings.Hotkey);
+        if (allowlistProblem is not null)
+            vm.ShowNotice($"Desktop control is limited: {allowlistProblem}.", 20);
         window.Show();
         _clientTask = Task.Run(() => client.RunAsync(_cts.Token));
     }
@@ -147,6 +160,7 @@ public partial class App : Application
         _cts.Cancel();
         _hotkey?.Dispose();
         _tray?.Dispose();
+        _uiReader?.Dispose();
         try
         {
             _clientTask?.Wait(TimeSpan.FromSeconds(2));

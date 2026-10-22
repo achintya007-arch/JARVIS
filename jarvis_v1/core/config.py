@@ -250,6 +250,8 @@ class BBPConfig:
     heartbeat_timeout_s: float = 15.0   # drop a Body that has sent nothing for this long
     confirm_timeout_s: float = 15.0     # confirm.request timeout_s (no answer = deny)
     speak_text_input: bool = False      # also speak replies to input.text
+    desktop_fallback: bool = True       # no capable Body → use the Python desktop tools
+    request_timeout_s: float = 5.0      # Brain → Body desktop.* request → E_TIMEOUT
 
 
 # =========================

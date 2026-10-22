@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.window.focus.response.schema.json",
+  "title": "desktop.window.focus (response) payload",
+  "type": "object",
+  "required": [
+    "ok",
+    "result"
+  ],
+  "properties": {
+    "ok": {
+      "const": true
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "hwnd",
+        "title",
+        "app"
+      ],
+      "properties": {
+        "hwnd": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "strategy": {
+          "type": "string",
+          "description": "Which foreground-lock workaround worked (diagnostics)"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

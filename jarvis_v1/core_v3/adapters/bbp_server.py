@@ -9,6 +9,7 @@ into Brain actions (milestone 2+). It owns no cognition.
   Body → ping (every 5 s)  Brain → pong                   (silent > timeout: close 4408)
   Brain → voice.state / voice.transcript / reply.chunk / reply.done  (events)
   Body → input.text / voice.control / ui.hotkey (commands; see bbp_commands.py)
+  Brain → desktop.* request → Body → response (corr = request id; 5 s → E_TIMEOUT)
 
 Fail-safe by construction: the server is optional (bbp.enabled), a failed
 start only logs, every Body has its own bounded send queue (a stalled Body is
@@ -21,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import getpass
 import hmac
+import itertools
 import json
 import logging
 import os
@@ -45,6 +47,7 @@ CLOSE_NORMAL = 1000               # spec: Brain shutting down
 CLOSE_AUTH = 4401                 # spec: bad or missing token
 CLOSE_HEARTBEAT = 4408            # spec: idle timeout (nothing received for heartbeat_timeout_s)
 _SEND_QUEUE_MAX = 512             # per-Body backlog before we drop the Body
+_CONNECTION_SEQ = itertools.count(1)
 _JARVIS_DIR = Path(__file__).resolve().parents[2]      # …/jarvis_v1
 
 CommandHandler = Callable[["BodyConnection", dict[str, Any]], Awaitable[None]]
@@ -100,6 +103,8 @@ class BodyConnection:
         self.client = str(hello.get("client", "?"))
         self.version = str(hello.get("version", "?"))
         self.capabilities = frozenset(hello.get("capabilities", []))
+        # Strictly increasing (time.monotonic() ties within one ~15 ms Windows tick).
+        self.connected_seq = next(_CONNECTION_SEQ)
         self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=_SEND_QUEUE_MAX)
 
     def send(self, message: dict[str, Any]) -> None:
@@ -132,6 +137,8 @@ class BBPServer:
         self._clients: set[BodyConnection] = set()
         self._commands: dict[str, CommandHandler] = {}
         self._tasks: set[asyncio.Task] = set()      # in-flight command handlers
+        # Brain → Body requests awaiting a response: request id → (Body, future)
+        self._pending: dict[str, tuple[BodyConnection, asyncio.Future]] = {}
         self._subscriptions = [
             (VoiceStateChanged, self._on_voice_state),
             (TranscriptReady, self._on_transcript),
@@ -197,6 +204,59 @@ class BBPServer:
     def register_command(self, topic: str, handler: CommandHandler) -> None:
         self._commands[topic] = handler
 
+    # ── Brain → Body requests ─────────────────────────────────────────────────
+    def body_with(self, capability: str) -> BodyConnection | None:
+        """The most recently connected Body that declared `capability`."""
+        bodies = [c for c in self._clients if capability in c.capabilities]
+        return max(bodies, key=lambda c: c.connected_seq) if bodies else None
+
+    async def request(self, topic: str, payload: dict[str, Any], *, capability: str,
+                      timeout: float) -> dict[str, Any]:
+        """Send a request to a capable Body and return its `result`.
+
+        Raises BBPError: the Body's own error (E_NOT_ALLOWED, E_NOT_FOUND, …),
+        E_TIMEOUT after `timeout` seconds, E_INTERNAL if the Body drops first,
+        E_NOT_FOUND if no connected Body has the capability."""
+        message = bbp.envelope("request", topic, payload)
+        bbp.validate(message)                         # a malformed request is a Brain bug: fail first
+        body = self.body_with(capability)
+        if body is None:
+            raise bbp.BBPError("E_NOT_FOUND", f"no connected Body has the {capability!r} capability")
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        self._pending[message["id"]] = (body, future)
+        try:
+            body.send(message)
+            return await asyncio.wait_for(future, timeout)
+        except asyncio.TimeoutError:
+            raise bbp.BBPError("E_TIMEOUT", f"{body.client} didn't answer {topic} within {timeout:g} s") from None
+        finally:
+            self._pending.pop(message["id"], None)
+
+    def _on_response(self, client: BodyConnection, message: dict[str, Any]) -> None:
+        entry = self._pending.get(message.get("corr") or "")
+        if entry is None:
+            log.info("BBP: late or unknown response %s from %s (dropped)", message["corr"], client.client)
+            return
+        body, future = entry
+        if body is not client or future.done():
+            log.warning("BBP: response %s from the wrong Body (dropped)", message["corr"])
+            return
+        try:
+            bbp.validate_payload(message)
+        except bbp.BBPError as e:
+            future.set_exception(bbp.BBPError("E_BAD_PAYLOAD", f"invalid response from {client.client}: {e.message}"))
+            return
+        if message["topic"] == "error":
+            err = message["payload"]["error"]
+            future.set_exception(bbp.BBPError(err["code"], err["message"]))
+        else:
+            future.set_result(message["payload"]["result"])
+
+    def _fail_pending(self, client: BodyConnection) -> None:
+        for body, future in list(self._pending.values()):
+            if body is client and not future.done():
+                future.set_exception(bbp.BBPError("E_INTERNAL", f"{client.client} disconnected before answering"))
+
     # ── Outgoing ──────────────────────────────────────────────────────────────
     def broadcast_event(self, topic: str, payload: dict[str, Any]) -> None:
         if not self._clients:
@@ -257,6 +317,7 @@ class BBPServer:
             await self._read_loop(client)
         finally:
             self._clients.discard(client)
+            self._fail_pending(client)
             writer.cancel()
             log.info("BBP: %s disconnected (%d connected)", client.client, len(self._clients))
 
@@ -307,6 +368,9 @@ class BBPServer:
         kind = message["kind"]
         if kind == "ping":
             client.send(bbp.envelope("pong", "pong", {}, corr=message["id"]))
+            return
+        if kind == "response":
+            self._on_response(client, message)
             return
         if kind != "command":
             return      # events, stray session messages: dropped (spec: unknown events dropped)

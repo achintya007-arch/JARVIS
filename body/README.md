@@ -5,7 +5,7 @@ The Body is the Windows-side shell for JARVIS. It connects to the Brain over the
 `ws://127.0.0.1:8765/bbp`, and shows what the Brain is doing. The Brain never
 depends on it: voice and text mode work the same with or without a Body attached.
 
-**What it does (milestones 1–2):**
+**What it does:**
 
 - **HUD:** an always-on-top, transparent panel. It shows the connection, the
   voice state (idle / listening / processing / speaking, plus "muted"), what
@@ -18,8 +18,13 @@ depends on it: voice and text mode work the same with or without a Body attached
   talking. Pressed while JARVIS is speaking, it interrupts him and listens.
 - **Tray icon:** shows the state at a glance. Right-click it to mute or unmute
   the microphone, show or hide the HUD, reconnect, or quit.
+- **Desktop control (read-only and low-risk actions):** when JARVIS opens an
+  app, switches to a window, lists windows, sets the volume or reads what's on
+  screen, it asks the Body, which does it with native Windows APIs. See
+  [Desktop control](#desktop-control).
 
-Notifications and confirmation dialogs come in milestone 3.
+Notifications and confirmation dialogs come next. Clicking or typing into other
+apps (`uia.invoke`, `uia.set_text`) waits until confirmations exist.
 
 ## Layout
 
@@ -35,14 +40,24 @@ body/
 │   ├── BodyState.cs       #   what the HUD shows, built from events
 │   ├── TokenLocator.cs    #   finds jarvis_v1/data/bbp_token
 │   └── Transport.cs       #   ClientWebSocket behind a small interface
+├── src/Jarvis.Desktop/    # desktop actions (Windows APIs, no UI)
+│   ├── DesktopService.cs  #   desktop.* request handlers + allowlist checks
+│   ├── DesktopAllowlist.cs#   the Body's own allowlist (desktop.allowlist.json)
+│   ├── Windows.cs         #   window list + focus through the foreground lock
+│   ├── Launcher.cs        #   allowlisted apps: absolute path, no shell
+│   ├── Volume.cs          #   Core Audio master volume
+│   ├── UiTree.cs          #   trimmed, capped UI tree; password fields removed
+│   └── UiaReader.cs       #   UI Automation (FlaUI), read-only
 ├── src/Jarvis.Body/       # WPF HUD (UI only)
+│   ├── desktop.allowlist.json # apps the Body may launch, focus or read
 │   ├── MainWindow.xaml    #   the HUD
 │   ├── TrayIcon.cs        #   notification-area icon and menu
 │   ├── GlobalHotkey.cs    #   RegisterHotKey + "Ctrl+Alt+J" parsing
 │   └── BodyLog.cs         #   %LOCALAPPDATA%\JARVIS\body.log
 └── tests/
-    ├── Bbp.Client.Tests   # envelope, schemas, backoff, close codes, commands, HUD state
-    └── Jarvis.Body.Tests  # hotkey parsing and conflicts, tray status
+    ├── Bbp.Client.Tests   # envelope, schemas, backoff, close codes, commands, requests, HUD state
+    ├── Jarvis.Body.Tests  # hotkey parsing and conflicts, tray status
+    └── Jarvis.Desktop.Tests # allowlist, UI-tree trimming, desktop request handlers
 ```
 
 The JSON Schemas in the repo-root [`protocol/`](../protocol/) folder are copied
@@ -118,3 +133,40 @@ How the Body reacts to each close code:
 | 4401 | Bad or missing token | Stop retrying until the token file changes or you choose **Reconnect** in the tray |
 | 4408 | Idle timeout | Reconnect immediately, then normal backoff |
 | Anything else / network drop | Unexpected | Reconnect with normal backoff |
+
+## Desktop control
+
+When the Body is connected, JARVIS's desktop tools run here instead of in
+Python. Each action is checked against the Body's **own** allowlist,
+`desktop.allowlist.json` next to `Jarvis.Body.exe`, whatever the Brain asks.
+Anything not on it is refused with `E_NOT_ALLOWED`, and the reply names the app.
+A missing or broken allowlist file means nothing is allowed.
+
+| Request | What the Body does |
+| --- | --- |
+| `desktop.app.launch` | Starts an allowlisted app from its resolved path, with no shell |
+| `desktop.window.focus` | Brings an allowlisted app's window to the front |
+| `desktop.window.list` | Lists real windows (what Alt+Tab shows), each marked `allowed` or not |
+| `desktop.audio.set_volume` | Sets the default speaker volume to a level or by a delta |
+| `desktop.uia.read` | Reads an allowlisted window's UI as text (read-only) |
+
+- **Focus:** Windows normally blocks a background program from bringing a
+  window to the front (the "foreground lock"). The Body gets around it by
+  sending a zero-distance mouse event first, which counts as input and moves
+  nothing, then verifies the window really is in front. If that fails it tries
+  two fallbacks. The log says which method worked. One known limit: if the app
+  in front runs as administrator (Task Manager, for example), Windows blocks
+  injected input from a normal program, so focus can still fail.
+- **Reading the screen:** `uia.read` defaults to the app in front, skipping the
+  HUD itself. Password and other secure fields are always removed, with
+  everything under them. The tree is capped at 12 levels, 300 nodes,
+  200-character names and about 2.5 seconds. JARVIS treats whatever it reads as
+  untrusted data, never as instructions.
+- **Allowlist entries:** `id` (same ids as the Brain's allowlist), `exe`,
+  optional `args` and `candidates` (install paths), `processes` (which
+  processes' windows belong to the app), optional `titles` (for apps hosted by
+  another process, such as Calculator) and `aliases`.
+
+If the Body isn't connected, JARVIS falls back to its Python tools, unless
+`bbp.desktop_fallback: false` is set. Reading the screen has no Python
+fallback.

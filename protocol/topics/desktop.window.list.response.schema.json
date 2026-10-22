@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.window.list.response.schema.json",
+  "title": "desktop.window.list (response) payload",
+  "type": "object",
+  "required": [
+    "ok",
+    "result"
+  ],
+  "properties": {
+    "ok": {
+      "const": true
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "windows"
+      ],
+      "properties": {
+        "windows": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "required": [
+              "title",
+              "app",
+              "hwnd",
+              "allowed"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "app": {
+                "type": "string"
+              },
+              "hwnd": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "allowed": {
+                "type": "boolean",
+                "description": "On the Body's allowlist (may be focused/read)"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

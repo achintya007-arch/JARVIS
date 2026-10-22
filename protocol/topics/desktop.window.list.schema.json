@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.window.list.schema.json",
+  "title": "desktop.window.list (request, Brain -> Body) payload",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": true
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.audio.set_volume.schema.json",
+  "title": "desktop.audio.set_volume (request, Brain -> Body) payload",
+  "description": "Exactly one of level (absolute) or delta (relative, clamped to 0-100).",
+  "type": "object",
+  "properties": {
+    "level": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "delta": {
+      "type": "integer",
+      "minimum": -100,
+      "maximum": 100
+    },
+    "device": {
+      "type": "string",
+      "description": "Reserved; v0.1 always uses the default output device"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "level"
+      ],
+      "not": {
+        "required": [
+          "delta"
+        ]
+      }
+    },
+    {
+      "required": [
+        "delta"
+      ],
+      "not": {
+        "required": [
+          "level"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": true
+}

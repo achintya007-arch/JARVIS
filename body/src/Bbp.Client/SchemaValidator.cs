@@ -50,9 +50,10 @@ public sealed class SchemaValidator
     }
 
     private static string PayloadSchemaPath(string kind, string topic) =>
-        Protocol.Kinds.IsSession(kind)
-            ? Path.Combine("session", kind + ".schema.json")
-            : Path.Combine("topics", topic + ".schema.json");
+        Protocol.Kinds.IsSession(kind) ? Path.Combine("session", kind + ".schema.json")
+        : kind == Protocol.Kinds.Response && topic != Topics.Error
+            ? Path.Combine("topics", topic + ".response.schema.json")     // amendment 14: { ok: true, result }
+        : Path.Combine("topics", topic + ".schema.json");
 
     private JsonSchema? Load(string relativePath) =>
         _cache.GetOrAdd(relativePath, rel =>
@@ -61,11 +62,19 @@ public sealed class SchemaValidator
             return File.Exists(path) ? JsonSchema.FromFile(path) : null;
         });
 
+    // JsonSchema.Net builds a schema's evaluation state lazily and that isn't
+    // safe across threads; the Body validates from several (requests run
+    // concurrently with events), so evaluations are serialised. A race showed
+    // up as an intermittently wrong result in parallel tests.
+    private static readonly object EvaluateGate = new();
+
     private static void Check(JsonSchema schema, JsonNode? instance, string where)
     {
         // A fresh options object per call keeps each evaluation's schema registry
         // private, so schemas sharing $id roots never collide.
-        var result = schema.Evaluate(instance, new EvaluationOptions { OutputFormat = OutputFormat.List });
+        EvaluationResults result;
+        lock (EvaluateGate)
+            result = schema.Evaluate(instance, new EvaluationOptions { OutputFormat = OutputFormat.List });
         if (result.IsValid)
             return;
         var failed = result.Details.FirstOrDefault(d => d.HasErrors) ?? result;

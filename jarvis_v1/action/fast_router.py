@@ -16,6 +16,8 @@ import re
 from dataclasses import dataclass
 from urllib.parse import quote_plus
 
+from action import app_launcher
+
 
 @dataclass(frozen=True)
 class RouteResult:
@@ -38,6 +40,33 @@ class FastRouter:
         r"|what time is it)\b",
         re.IGNORECASE,
     )
+
+    # "what's on my screen", "what am I looking at", "read this window to me".
+    # Routed deterministically: small local models often answer from the window
+    # title instead of calling read_screen_ui. The screen word must END the
+    # request ("…screen resolution of a macbook" stays with the LLM).
+    _SCREEN = re.compile(
+        r"^(?:what(?:'s| is| do you see)|tell me what(?:'s| is)|describe|read)\b.{0,30}?"
+        r"\b(?:on|in)?\s*(?:my|the|this)\s+(?:screen|window|display)"
+        r"(?:\s+(?:right now|now|please|for me|to me))?\s*[?.!]*$"
+        r"|^what am i looking at(?:\s+(?:right now|now))?\s*[?.!]*$",
+    )
+
+    # "switch to chrome", "go to vs code", "focus notepad", "bring up spotify".
+    # Fires only when the target is an allowlisted app (action/app_launcher);
+    # anything else ("switch to dark mode") stays with the LLM.
+    _FOCUS = re.compile(
+        r"^(?:switch|go|change|jump)\s+(?:back\s+)?to\s+(?P<a>.+)$"
+        r"|^(?:focus(?:\s+on)?|bring\s+up|show(?:\s+me)?)\s+(?P<b>.+)$",
+    )
+    # "open my notes", "open the report file", "open a new tab": not app launches.
+    _NOT_AN_APP = re.compile(
+        r"\b(?:notes?|vault|journal|files?|folders?|documents?|docs?|pdf|tabs?|links?|urls?|"
+        r"websites?|pages?|sites?|emails?|mail|messages?|reminders?|goals?|tasks?|calendar)\b"
+        r"|[./\:]",
+    )
+
+    _FOCUS_TAIL = re.compile(r"(?:\s+(?:please|now|for me|window))*\s*[?.!]*$")
 
     _SYSINFO = re.compile(
         r"\b(system (?:status|info|stats|health|usage|check)"
@@ -232,6 +261,16 @@ class FastRouter:
         url = "https://www.youtube.com/results?search_query=" + quote_plus(query)
         return RouteResult(tool="open_url", args={"url": url, "name": f"YouTube search for {query}"})
 
+    def launch_intent(self, text: str) -> RouteResult | None:
+        """"open/launch/start <name>" as an open_app call for ANY name — the
+        executor's allowlist decides. Only used to correct an LLM that claimed
+        to open something without calling a tool; never a primary route."""
+        m = self._LAUNCH.search(self._normalize(text))
+        if not m or m.group("verb").lower() == "play":
+            return None
+        target = m.group("target").strip()
+        return RouteResult(tool="open_app", args={"name": target}) if target else None
+
     def route(self, text: str):
         text = self._normalize(text)
         parts = self._CONJ_SPLIT.split(text)
@@ -249,6 +288,20 @@ class FastRouter:
 
         if self._TIME.search(text):
             return RouteResult(tool="get_time", args={})
+
+        if self._SCREEN.search(text):
+            return RouteResult(tool="read_screen_ui", args={})
+
+        m = self._FOCUS.match(text)
+        if m:
+            target = self._FOCUS_TAIL.sub("", m.group("a") or m.group("b") or "").strip()
+            target = re.sub(r"^(?:the|my)\s+", "", target)
+            try:
+                key = app_launcher.resolve_key(target)
+            except app_launcher.AppNotAllowed:
+                key = None                      # not an app: let the LLM handle it
+            if key is not None:
+                return RouteResult(tool="focus_window", args={"title": key})
 
         if self._SYSINFO.search(text):
             return RouteResult(tool="system_info", args={})
@@ -369,6 +422,11 @@ class FastRouter:
             for key, (url, name) in self._URL_MAP.items():
                 if key in target:
                     return RouteResult(tool="open_url", args={"url": url, "name": name})
+            # Any other "open/launch X": the executor's allowlist answers —
+            # opened, or an honest "not on my list" (small LLMs otherwise claim
+            # "Command Prompt is now open" without calling a tool).
+            if verb in ("open", "launch") and not self._NOT_AN_APP.search(target):
+                return RouteResult(tool="open_app", args={"name": target})
 
         return None
 

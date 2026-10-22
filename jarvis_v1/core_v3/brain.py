@@ -28,6 +28,7 @@ from core.config import Config
 from core_v3.adapters import ResourceAdapter
 from core_v3.adapters.bbp_commands import BBPCommands
 from core_v3.adapters.bbp_server import BBPServer
+from core_v3.adapters.remote_desktop import RemoteDesktop
 from core_v3.conversation import TURN_FAILED_REPLY, ConversationEngine
 from core_v3.event_bus import EventBus
 from core_v3.events import SpeakRequest, SystemEvent
@@ -125,6 +126,12 @@ class Brain:
                 config=config.bbp, turn_lock=self._turn_lock,
                 voice_active=lambda: getattr(self.config, "mode", "wake") != "text",
             ).register(self._bbp)
+            # Desktop tools go to a connected Body when it can do them; otherwise
+            # the Python tools run (unless bbp.desktop_fallback is false).
+            self._executor.attach_remote_desktop(
+                RemoteDesktop(self._bbp, timeout_s=config.bbp.request_timeout_s),
+                fallback=config.bbp.desktop_fallback,
+            )
 
     # Late-bound executor callbacks → orchestrator.
     async def _speak_cb(self, text: str) -> None:

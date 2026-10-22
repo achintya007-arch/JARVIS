@@ -263,6 +263,21 @@ python -m tools.bbp_probe
 If the server can't start, or no Body is connected, voice and text mode work
 exactly as before.
 
+With the Body connected, JARVIS's desktop tools run there with native Windows
+APIs: opening apps, switching windows (it reliably gets past Windows' focus
+lock, which the Python tool couldn't), listing windows, setting the volume, and
+answering "what's on my screen?" from the window's UI text instead of a
+screenshot. The Body only touches apps on its own allowlist
+(`body/src/Jarvis.Body/desktop.allowlist.json`); see
+[`body/README.md`](body/README.md#desktop-control). Two settings in the `bbp`
+section control this:
+
+```yaml
+bbp:
+  desktop_fallback: true   # no Body connected → use the Python desktop tools
+  request_timeout_s: 5     # how long the Brain waits for the Body to answer
+```
+
 ## Security posture
 
 Tool execution is an LLM-driven surface, and the LLM's context can include
@@ -286,7 +301,7 @@ are skipped via `pytest.importorskip`):
 
 ```bash
 cd jarvis_v1
-pytest tests/ -v          # 382 tests
+pytest tests/ -v          # 459 tests
 ruff check .              # lint incl. tests/ (CI-blocking)
 ```
 
@@ -316,7 +331,7 @@ jarvis_v1/
 ├── infra/             # resource monitor (VRAM/RAM watchdog)
 ├── memory/            # V3 vault: vault, indexer, embeddings, web_rag
 ├── data/              # offline FineWeb index builder
-├── tests/             # pytest suite (382 tests)
+├── tests/             # pytest suite (459 tests)
 ├── tools/             # diagnostics: wake_check, mic_smoke, mic_check, voice_test,
 │                      #   bbp_probe (fake Body)
 └── docs/              # engineering design document (md + pdf)

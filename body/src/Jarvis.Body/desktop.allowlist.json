@@ -1,0 +1,26 @@
+{
+  "_comment": "Apps the Body may launch, focus or read (BBP desktop.*). Enforced by the Body regardless of what the Brain asks; anything else gets E_NOT_ALLOWED. Ids match the Brain's allowlist (jarvis_v1/action/app_launcher.py). processes = window owners; titles = optional title filter for hosted apps.",
+  "apps": [
+    { "id": "notepad", "display": "Notepad", "exe": "notepad.exe", "processes": ["notepad.exe"] },
+    { "id": "calculator", "display": "Calculator", "exe": "calc.exe", "aliases": ["calc"],
+      "processes": ["applicationframehost.exe", "calculatorapp.exe"], "titles": ["Calculator"] },
+    { "id": "paint", "display": "Paint", "exe": "mspaint.exe", "aliases": ["mspaint"], "processes": ["mspaint.exe"] },
+    { "id": "task manager", "display": "Task Manager", "exe": "taskmgr.exe", "aliases": ["taskmgr"], "processes": ["taskmgr.exe"] },
+    { "id": "explorer", "display": "File Explorer", "exe": "explorer.exe", "aliases": ["file explorer", "files"], "processes": ["explorer.exe"] },
+    { "id": "chrome", "display": "Chrome", "exe": "chrome.exe", "aliases": ["google chrome"], "processes": ["chrome.exe"] },
+    { "id": "firefox", "display": "Firefox", "exe": "firefox.exe", "processes": ["firefox.exe"] },
+    { "id": "vscode", "display": "VS Code", "exe": "Code.exe",
+      "candidates": ["%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\Code.exe", "%PROGRAMFILES%\\Microsoft VS Code\\Code.exe"],
+      "aliases": ["code", "vs code", "visual studio code"], "processes": ["code.exe"] },
+    { "id": "spotify", "display": "Spotify", "exe": "Spotify.exe", "candidates": ["%APPDATA%\\Spotify\\Spotify.exe"],
+      "uri": "spotify:", "processes": ["spotify.exe"] },
+    { "id": "discord", "display": "Discord", "exe": "Update.exe", "args": ["--processStart", "Discord.exe"],
+      "candidates": ["%LOCALAPPDATA%\\Discord\\Update.exe"], "processes": ["discord.exe"] },
+    { "id": "todoist", "display": "Todoist", "exe": "Todoist.exe",
+      "candidates": ["%LOCALAPPDATA%\\Todoist\\Todoist.exe", "%LOCALAPPDATA%\\Programs\\todoist\\Todoist.exe"],
+      "processes": ["todoist.exe"] },
+    { "id": "word", "display": "Word", "exe": "winword.exe", "aliases": ["microsoft word"], "processes": ["winword.exe"] },
+    { "id": "excel", "display": "Excel", "exe": "excel.exe", "aliases": ["microsoft excel"], "processes": ["excel.exe"] },
+    { "id": "outlook", "display": "Outlook", "exe": "outlook.exe", "aliases": ["microsoft outlook"], "processes": ["outlook.exe", "olk.exe"] }
+  ]
+}

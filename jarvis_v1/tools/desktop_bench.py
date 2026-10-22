@@ -154,9 +154,9 @@ class PythonBackend:
     async def set_volume(self, level: int) -> str:
         return str(await self._call("set_volume", {"level": level}))
 
-    async def read_screen(self) -> dict:
+    async def read_screen(self, app: str | None = None) -> dict:
         """No structured screen reader exists today: the closest tool is a
-        screenshot, which yields a file path, not content."""
+        screenshot, which yields a file path, not content (app is ignored)."""
         path = Path(await self._call("screenshot", {}))
         ok = path.is_file() and path.stat().st_size > 0
         path.unlink(missing_ok=True)                       # don't keep pictures of your screen
@@ -376,18 +376,21 @@ async def bench_volume(backend, n: int) -> Result:
     return r
 
 
-async def bench_read(backend, n: int) -> Result:
-    r = Result("uia.read", "foreground")
+async def bench_read(backend, n: int, app: str | None = None) -> Result:
+    """Read an app's UI (Body) — or take a screenshot, the closest Python tool."""
+    r = Result("uia.read", app or "foreground")
+    out: dict = {}
     for _ in range(n):
         t0 = time.perf_counter()
         try:
-            out = await backend.read_screen()
+            out = await backend.read_screen(app)
         except Exception as e:
             r.samples.append(Sample(False, (time.perf_counter() - t0) * 1000, None, f"raised: {e}"[:120]))
             continue
         ms = (time.perf_counter() - t0) * 1000
         r.samples.append(Sample(bool(out.get("ok")), ms, ms, out.get("note", "")))
-    r.note = out.get("note", "") if r.samples else ""          # type: ignore[attr-defined]
+        r.nodes = getattr(r, "nodes", []) + [out.get("nodes", 0)]   # type: ignore[attr-defined]
+    r.note = out.get("note", "")                                # type: ignore[attr-defined]
     return r
 
 
@@ -395,6 +398,8 @@ async def bench_read(backend, n: int) -> Result:
 
 async def run(args) -> list[Result]:
     backend = make_backend(args.backend)
+    if hasattr(backend, "start"):
+        await backend.start()
     apps = [APPS[a] for a in args.apps.split(",")]
     only = set(args.only.split(","))
     original_fg = user32.GetForegroundWindow()
@@ -405,7 +410,7 @@ async def run(args) -> list[Result]:
             for app in apps:
                 print(f"launch {app.key} ×{args.launch_n} …", flush=True)
                 results.append(await bench_launch(backend, app, args.launch_n, args.timeout))
-        if only & {"focus", "list"}:
+        if only & {"focus", "list", "read"}:
             targets = await _open_targets(apps)
             print(f"focus/list targets: {sorted(targets)}", flush=True)
         if "focus" in only:
@@ -419,7 +424,11 @@ async def run(args) -> list[Result]:
             results.append(await bench_volume(backend, args.n))
         if "read" in only:
             print(f"read ×{args.n} …", flush=True)
-            results.append(await bench_read(backend, args.n))
+            if backend.name == "python":
+                results.append(await bench_read(backend, args.n))
+            else:
+                for key in targets:                            # each bench-owned window
+                    results.append(await bench_read(backend, args.n, key))
     finally:
         # Close only the windows we opened for focus/list (existing ones stay).
         opened = {w.hwnd for w in targets.values()}
@@ -443,6 +452,9 @@ def report(results: list[Result], backend: str) -> dict:
             row["real_windows_median"] = statistics.median(r.truth)
         if hasattr(r, "note") and r.note:
             row["note"] = r.note
+        if getattr(r, "nodes", None):
+            row["nodes_median"] = statistics.median(r.nodes)
+            row["note"] = f"{row.get('note', '')}, {row['nodes_median']:.0f} nodes".lstrip(", ")
         if getattr(r, "already", 0):
             row["skipped_already_foreground"] = r.already
             row["failures"] = [f"{r.already} skipped: already in front"] + row["failures"]

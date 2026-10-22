@@ -6,7 +6,7 @@
 .\run.ps1              # V3 (vault brain), voice
 .\run.ps1 -Text        # V3, keyboard input (no mic needed) — easiest for a first check
 .\run.ps1 -V2          # V2 (stable brain)
-.\run.ps1 -Test        # run the automated test suite (382 tests)
+.\run.ps1 -Test        # run the automated test suite (459 tests)
 .\run.ps1 -VoiceTest   # A/B test TTS voice/rate/pitch without the full pipeline
 ```
 
@@ -23,6 +23,22 @@ cd ..\body; dotnet test; dotnet run --project src\Jarvis.Body
 ```
 
 With the HUD running: type in its box and press Enter (the reply shows on the HUD and is not spoken). Press Ctrl+Alt+J and speak (push-to-talk). Right-click the tray icon to mute or unmute: the HUD shows "muted", and Ctrl+Alt+J is then refused with a notice. The Body log is %LOCALAPPDATA%\JARVIS\body.log.
+
+### Desktop control benchmark
+
+`tools/desktop_bench.py` opens, focuses, lists and reads real app windows
+(Notepad, Chrome, VS Code, File Explorer) and nudges the volume by 1–2 %,
+checking each result with Win32 calls. It closes only the windows it opened and
+restores your volume and foreground window afterwards.
+
+```powershell
+python -m tools.desktop_bench                  # the Python tools
+python -m tools.desktop_bench --backend body   # through the C# Body (start it pointed at port 8766)
+```
+
+For `--backend body`, put `{"url": "ws://127.0.0.1:8766/bbp"}` in
+`body.settings.json` next to `Jarvis.Body.exe`, start the bench, then start the
+Body. Results are saved under `data/bench/`.
 
 ### Tuning the voice
 

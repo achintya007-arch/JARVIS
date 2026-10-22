@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.app.launch.schema.json",
+  "title": "desktop.app.launch (request, Brain -> Body) payload",
+  "description": "Launch an app by its allowlist id. The Body resolves the executable itself and refuses ids not on its own allowlist (E_NOT_ALLOWED).",
+  "type": "object",
+  "required": [
+    "app_id"
+  ],
+  "properties": {
+    "app_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    }
+  },
+  "additionalProperties": true
+}

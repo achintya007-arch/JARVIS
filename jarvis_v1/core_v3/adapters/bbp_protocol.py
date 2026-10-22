@@ -6,7 +6,8 @@ The JSON Schemas in the repo-root protocol/ folder are the machine-readable spec
 
   1. the whole message against protocol/envelope.schema.json
   2. its payload against protocol/session/<kind>.schema.json for session kinds
-     (hello/welcome/ping/pong), otherwise protocol/topics/<topic>.schema.json
+     (hello/welcome/ping/pong), protocol/topics/<topic>.response.schema.json for
+     a successful response, otherwise protocol/topics/<topic>.schema.json
 
 A topic with no schema file is unknown. No network code lives here, so a later
 client (phone, web) can reuse it.
@@ -58,7 +59,11 @@ def _validator(rel_path: str) -> Draft202012Validator | None:
 
 
 def _payload_schema(kind: str, topic: str) -> str:
-    return f"session/{kind}.schema.json" if kind in SESSION_KINDS else f"topics/{topic}.schema.json"
+    if kind in SESSION_KINDS:
+        return f"session/{kind}.schema.json"
+    if kind == "response" and topic != "error":
+        return f"topics/{topic}.response.schema.json"      # amendment 14: {ok: true, result}
+    return f"topics/{topic}.schema.json"
 
 
 def has_schema(kind: str, topic: str) -> bool:

@@ -60,9 +60,27 @@ def active_window_title() -> str:
         return ""
     try:
         w = gw.getActiveWindow()
-        return (w.title or "").strip() if w else ""
+        if not w or _is_own_window(w._hWnd):
+            return ""          # JARVIS's own HUD says nothing about what Sir is doing
+        return (w.title or "").strip()
     except Exception:
         return ""
+
+
+_OWN_PROCESSES = frozenset({"jarvis.body.exe"})
+
+
+def _is_own_window(hwnd: int) -> bool:
+    """True for windows of JARVIS's own Body (the HUD you type into)."""
+    import ctypes
+
+    import psutil
+    pid = ctypes.c_ulong()
+    ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    try:
+        return psutil.Process(pid.value).name().lower() in _OWN_PROCESSES
+    except psutil.Error:
+        return False
 
 
 # ── Screenshot save dir ────────────────────────────────────────────────────────

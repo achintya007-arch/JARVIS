@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.window.focus.schema.json",
+  "title": "desktop.window.focus (request, Brain -> Body) payload",
+  "description": "Bring a window to the foreground: the most recently used window of an allowlisted app, or the first real window whose title contains the text (its app must be allowlisted).",
+  "type": "object",
+  "properties": {
+    "app": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "title_contains": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "app"
+      ]
+    },
+    {
+      "required": [
+        "title_contains"
+      ]
+    }
+  ],
+  "additionalProperties": true
+}

@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Jarvis.Body</AssemblyName>
     <RootNamespace>Jarvis.Body</RootNamespace>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <!-- WinForms/System.Drawing names clash with WPF ones (Application,
@@ -22,8 +22,10 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Bbp.Client\Bbp.Client.csproj" />
+    <ProjectReference Include="..\Jarvis.Desktop\Jarvis.Desktop.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="body.settings.example.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="desktop.allowlist.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

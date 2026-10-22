@@ -25,23 +25,24 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from action.desktop_errors import DesktopError
+
 log = logging.getLogger("jarvis.launcher")
 
 
-class AppNotAllowed(Exception):
+class AppNotAllowed(DesktopError):
     """The requested app isn't on the allowlist (BBP error code E_NOT_ALLOWED)."""
 
-    code = "E_NOT_ALLOWED"
-
     def __init__(self, requested: str) -> None:
-        super().__init__(f"'{requested}' is not on the list of apps I'm allowed to open")
+        super().__init__("E_NOT_ALLOWED", f"'{requested}' is not on the list of apps I'm allowed to open")
         self.requested = requested
 
 
-class AppNotInstalled(Exception):
+class AppNotInstalled(DesktopError):
     """Allowed, but no executable was found on this machine (E_NOT_FOUND)."""
 
-    code = "E_NOT_FOUND"
+    def __init__(self, message: str) -> None:
+        super().__init__("E_NOT_FOUND", message)
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.uia.read.response.schema.json",
+  "title": "desktop.uia.read (response) payload",
+  "type": "object",
+  "required": [
+    "ok",
+    "result"
+  ],
+  "properties": {
+    "ok": {
+      "const": true
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "app",
+        "title",
+        "root",
+        "node_count",
+        "truncated"
+      ],
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "root": {
+          "$ref": "#/$defs/node"
+        },
+        "node_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": [
+        "control_type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "control_type": {
+          "type": "string"
+        },
+        "automation_id": {
+          "type": "string"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

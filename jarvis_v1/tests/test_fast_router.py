@@ -1,5 +1,7 @@
 """Unit tests for FastRouter — pure regex routing, no external deps."""
 
+import pytest
+
 from action.fast_router import FastRouter, RouteResult
 
 
@@ -111,3 +113,43 @@ class TestDurationParsing:
     def test_timer_route_end_to_end(self):
         res = r().route("set a timer for 2 hours 30 minutes")
         assert res.tool == "set_timer" and res.args["duration_seconds"] == 9000
+
+
+class TestFocusRoute:
+    """"switch to <app>" is deterministic for allowlisted apps (the 7B model
+    tends to narrate "Bringing X to the foreground…" without calling a tool)."""
+
+    @pytest.mark.parametrize("text,app", [
+        ("switch to calculator", "calculator"), ("go to vs code", "vscode"),
+        ("switch back to chrome please", "chrome"), ("focus notepad", "notepad"),
+        ("bring up spotify", "spotify"), ("show me the file explorer", "explorer"),
+        ("hey jarvis switch to chrome", "chrome"),
+    ])
+    def test_allowlisted_apps(self, text, app):
+        res = r().route(text)
+        assert res.tool == "focus_window" and res.args == {"title": app}
+
+    @pytest.mark.parametrize("text", ["switch to dark mode", "go to sleep", "focus on my work", "switch to cmd"])
+    def test_everything_else_stays_with_the_llm(self, text):
+        res = r().route(text)
+        assert res is None or res.tool != "focus_window"
+
+
+class TestOpenAnything:
+    """"open/launch X" always reaches the allowlist, so the answer is the truth
+    (opened, or refused) instead of an LLM claiming it opened something."""
+
+    @pytest.mark.parametrize("text,name", [
+        ("open cmd", "cmd"), ("launch powershell", "powershell"), ("open the pod bay doors", "the pod bay doors"),
+    ])
+    def test_unknown_names_go_to_open_app(self, text, name):
+        res = r().route(text)
+        assert res.tool == "open_app" and res.args == {"name": name}
+
+    @pytest.mark.parametrize("text", [
+        "open my notes", "open the report file", "open a new tab", "open my calendar",
+        r"open C:\Windows", "start recording",
+    ])
+    def test_non_apps_stay_with_the_llm(self, text):
+        res = r().route(text)
+        assert res is None or res.tool != "open_app"

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.uia.read.schema.json",
+  "title": "desktop.uia.read (request, Brain -> Body) payload",
+  "description": "Read-only UI Automation tree of an allowlisted app's window. app defaults to the foreground window's app.",
+  "type": "object",
+  "properties": {
+    "app": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "scope": {
+      "enum": [
+        "window",
+        "focused"
+      ],
+      "default": "window"
+    },
+    "max_depth": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 30
+    },
+    "max_nodes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000
+    }
+  },
+  "additionalProperties": true
+}

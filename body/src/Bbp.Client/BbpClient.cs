@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace Bbp.Client;
 
@@ -10,6 +11,11 @@ public enum ConnectionState
     Connected,
     AuthFailed,
 }
+
+/// <summary>Answers one Brain → Body request. Return the `result` object
+/// (serialized snake_case); throw <see cref="BbpException"/> to refuse with a
+/// spec error code (E_NOT_ALLOWED, E_NOT_FOUND, …).</summary>
+public delegate Task<object> RequestHandler(Envelope request, CancellationToken ct);
 
 public sealed class BbpClientOptions
 {
@@ -31,6 +37,9 @@ public sealed class BbpClientOptions
     /// <summary>After a 4401, how often to check whether the token file changed.</summary>
     public TimeSpan AuthRetryPollInterval { get; init; } = TimeSpan.FromSeconds(3);
 
+    /// <summary>Budget for one request handler; the Brain gives up at 5 s.</summary>
+    public TimeSpan RequestBudget { get; init; } = TimeSpan.FromSeconds(4.5);
+
     /// <summary>How long to wait for welcome after hello.</summary>
     public TimeSpan WelcomeTimeout { get; init; } = TimeSpan.FromSeconds(10);
 }
@@ -50,6 +59,7 @@ public sealed class BbpClient
     private readonly ReconnectPolicy _backoff = new();
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly SemaphoreSlim _reconnectSignal = new(0, 1);
+    private readonly Dictionary<string, RequestHandler> _requestHandlers = new();
     private IBbpSocket? _socket;
     private int _outstandingPings;
 
@@ -80,6 +90,12 @@ public sealed class BbpClient
 
     /// <summary>A message from the Brain that failed validation (dropped).</summary>
     public event Action<string>? ProtocolError;
+
+    /// <summary>(topic, outcome, milliseconds) after each request is answered — for the log.</summary>
+    public event Action<string, string, double>? RequestHandled;
+
+    /// <summary>Answer Brain requests on <paramref name="topic"/>. Register before RunAsync.</summary>
+    public void HandleRequests(string topic, RequestHandler handler) => _requestHandlers[topic] = handler;
 
     /// <summary>
     /// Run until cancelled: connect, serve the session, then react to how it
@@ -294,7 +310,25 @@ public sealed class BbpClient
 
     private void Dispatch(string raw)
     {
-        var message = Parse(raw);
+        JsonNode? node;
+        try
+        {
+            node = JsonNode.Parse(raw);
+        }
+        catch (JsonException e)
+        {
+            ProtocolError?.Invoke($"not JSON: {e.Message}");
+            return;
+        }
+        // A request always gets an answer, even an invalid one, so it is
+        // handled before (and apart from) the generic drop-if-invalid path.
+        if (node is JsonObject obj && obj["kind"] is JsonValue k && k.GetValueKind() == JsonValueKind.String
+            && (string)k! == Protocol.Kinds.Request)
+        {
+            _ = HandleRequestAsync(obj);
+            return;
+        }
+        var message = Validate(node);
         if (message is null)
             return;
         switch (message.Kind)
@@ -326,6 +360,11 @@ public sealed class BbpClient
             ProtocolError?.Invoke($"not JSON: {e.Message}");
             return null;
         }
+        return Validate(node);
+    }
+
+    private Envelope? Validate(JsonNode? node)
+    {
         try
         {
             _validator.Validate(node);
@@ -341,6 +380,69 @@ public sealed class BbpClient
             return null;
         }
     }
+
+    // ── Requests (Brain → Body), amendment 14 ───────────────────────────────
+
+    private async Task HandleRequestAsync(JsonObject node)
+    {
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        var id = node["id"] is JsonValue v && v.GetValueKind() == JsonValueKind.String ? (string)v! : null;
+        var topic = node["topic"] is JsonValue t && t.GetValueKind() == JsonValueKind.String ? (string)t! : "?";
+        Envelope reply;
+        try
+        {
+            _validator.ValidateEnvelope(node);
+            var request = Envelope.FromNode(node);
+            if (!_requestHandlers.TryGetValue(request.Topic, out var handler))
+                throw new BbpException("E_UNKNOWN_TOPIC", $"the Body doesn't handle '{request.Topic}'");
+            _validator.ValidatePayload(request.Kind, request.Topic, request.Payload);
+
+            using var budget = new CancellationTokenSource(_options.RequestBudget);
+            var result = await Task.Run(() => handler(request, budget.Token), budget.Token).ConfigureAwait(false);
+            reply = Envelope.Create(Protocol.Kinds.Response, request.Topic, new RequestOk(true, result), corr: request.Id);
+            try
+            {
+                _validator.Validate(reply);         // never send a result the schema rejects
+            }
+            catch (BbpException e)
+            {
+                throw new BbpException("E_INTERNAL", $"invalid result: {e.Detail}");
+            }
+        }
+        catch (Exception e)
+        {
+            if (id is null)
+            {
+                ProtocolError?.Invoke($"unanswerable request (no id): {e.Message}");
+                return;
+            }
+            var (code, message) = e switch
+            {
+                BbpException b => (b.Code, b.Detail),
+                OperationCanceledException => ("E_TIMEOUT", "the Body ran out of time"),
+                _ => ("E_INTERNAL", e.Message),
+            };
+            reply = ErrorReply(id, code, message);
+        }
+
+        RequestHandled?.Invoke(topic, reply.Topic == Topics.Error
+            ? reply.PayloadAs<ErrorPayload>().Error.Code : "ok", started.Elapsed.TotalMilliseconds);
+        var socket = _socket;
+        if (socket is null)
+            return;                                 // disconnected meanwhile: the Brain times out
+        try
+        {
+            await SendAsync(socket, reply, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            ProtocolError?.Invoke($"couldn't send response: {e.Message}");
+        }
+    }
+
+    private static Envelope ErrorReply(string requestId, string code, string message) =>
+        Envelope.Create(Protocol.Kinds.Response, Topics.Error,
+            new ErrorPayload(false, new ErrorInfo(code, message)), corr: requestId);
 
     private async Task SendAsync(IBbpSocket socket, Envelope message, CancellationToken ct)
     {
@@ -361,3 +463,6 @@ public sealed class BbpClient
         StateChanged?.Invoke(state, detail);
     }
 }
+
+/// <summary>Successful response payload: { ok: true, result }.</summary>
+public sealed record RequestOk(bool Ok, [property: JsonPropertyName("result")] object Result);

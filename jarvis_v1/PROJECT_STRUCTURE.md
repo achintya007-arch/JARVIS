@@ -45,7 +45,8 @@ jarvis_v1/
 │   │   ├── resource.py     #   ResourceAdapter (model switching on pressure)
 │   │   ├── bbp_protocol.py #   Brain–Body Protocol envelopes + schema validation
 │   │   ├── bbp_server.py   #   BBP WebSocket server (off unless bbp.enabled)
-│   │   └── bbp_commands.py #   Body commands: input.text, voice.control, ui.hotkey
+│   │   ├── bbp_commands.py #   Body commands: input.text, voice.control, ui.hotkey
+│   │   └── remote_desktop.py # desktop.* requests to the Body (routing for desktop tools)
 │   ├── event_bus.py
 │   └── events.py           # V3 events incl. VoiceStateChanged, TranscriptReady,
 │                           #   ReplyChunk, ReplyDone (forwarded to Bodies)
@@ -78,6 +79,7 @@ jarvis_v1/
 ├── action/
 │   ├── fast_router.py      # Deterministic fast-path for common commands
 │   ├── app_launcher.py     # THE app allowlist: name → absolute path → argv, never a shell
+│   ├── desktop_errors.py   # DesktopError codes shared by the Python and Body paths
 │   ├── agent_executor.py   # Tool dispatcher — shell allowlist, FS sandbox,
 │   │                       #   fail-closed confirmation (security boundary)
 │   ├── obsidian_tools.py   # Read/write helpers for the Obsidian vault
@@ -100,7 +102,7 @@ jarvis_v1/
 │   ├── build_web_index.py  # Builds the FineWeb web-knowledge index
 │   └── fineweb_pipeline.py # FineWeb-Edu download + content filtering
 │
-├── tests/                  # pytest suite — 382 tests, no GPU/Ollama needed
+├── tests/                  # pytest suite — 459 tests, no GPU/Ollama needed
 │   ├── conftest.py
 │   ├── test_security.py        # shell allowlist / sandbox / confirmation
 │   ├── test_fast_router.py / test_hot_path.py
@@ -114,6 +116,7 @@ jarvis_v1/
 │   ├── test_web_rag.py / test_fineweb_pipeline.py
 │   ├── test_bbp_contract.py / test_bbp_server.py / test_bbp_events.py
 │   ├── test_bbp_commands.py / test_voice_body_controls.py
+│   ├── test_remote_desktop.py  # desktop requests, routing, fallback, read_screen_ui
 │   └── test_phase_f.py
 │
 ├── tools/                  # Diagnostics (launched via run.ps1 flags)
@@ -122,7 +125,8 @@ jarvis_v1/
 │   ├── mic_check.py        # -MicCheck: V2 speech-capture diagnostic
 │   ├── voice_test.py       # -VoiceTest: TTS voice/rate/pitch A/B tester
 │   ├── bbp_probe.py        # fake Body: prints every BBP event (python -m tools.bbp_probe)
-│   └── desktop_bench.py    # desktop-tool success rate + latency against real apps
+│   ├── desktop_bench.py    # desktop-tool success rate + latency against real apps
+│   └── desktop_bench_body.py # the bench's Body backend (--backend body)
 │
 └── docs/
     ├── JARVIS_Design_Document_v0.1.md

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.app.launch.response.schema.json",
+  "title": "desktop.app.launch (response) payload",
+  "type": "object",
+  "required": [
+    "ok",
+    "result"
+  ],
+  "properties": {
+    "ok": {
+      "const": true
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "pid",
+        "app_id"
+      ],
+      "properties": {
+        "pid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "app_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

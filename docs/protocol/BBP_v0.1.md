@@ -127,8 +127,8 @@ The Brain sends a `request`, the Body acts natively and replies with a `response
 | `desktop.app.launch` | `app_id` (allowlisted name) | `pid` |
 | `desktop.window.focus` | `app` or `title_contains` | `hwnd`, `title` |
 | `desktop.window.list` | none | Visible windows: `title`, `app`, `hwnd` |
-| `desktop.audio.set_volume` | `level` 0–100, optional `device` | Applied level |
-| `desktop.uia.read` | `app`, `scope` (window or focused) | Trimmed UI tree: name, control type, automation ID |
+| `desktop.audio.set_volume` | `level` 0–100 **or** `delta` −100…100, optional `device` | `level`, `muted` |
+| `desktop.uia.read` | optional `app` (default: the foreground window's app), `scope` (window or focused) | Trimmed UI tree: name, control type, automation ID |
 | `desktop.uia.invoke` | `app`, `element` {`name`, `control_type`, `automation_id`} | `ok` |
 | `desktop.uia.set_text` | `app`, `element`, `text` | `ok` |
 
@@ -154,6 +154,7 @@ A failure returns `{ "ok": false, "error": { "code", "message" } }`.
 | `E_NOT_FOUND` | App, window or UI element not found |
 | `E_TIMEOUT` | No response in time |
 | `E_BUSY` | Receiver is mid-action; retry later |
+| `E_INTERNAL` | Receiver failed unexpectedly (amendment 14) |
 
 **Versioning:** adding fields or topics keeps `v: 1`, and receivers ignore fields they don't know. Removing or renaming anything bumps `v`. Unknown events are dropped silently; unknown requests get `E_UNKNOWN_TOPIC`.
 
@@ -217,6 +218,14 @@ Additive changes made while implementing milestones 1–3; `v` stays `1`.
     - `cancel` stops the current turn wherever it is (listening, thinking or speaking) and returns to idle. It interrupts like barge-in but doesn't listen again, because it comes from a button, not speech.
     - wake (or `push_to_talk`) while JARVIS is speaking is a barge-in: speech stops and JARVIS listens for the new command.
     - `mute` closes the microphone stream, so the OS microphone indicator goes off. A reply already being spoken finishes. The muted state survives a Body reconnect (it is in the `welcome` snapshot).
+
+12. **`desktop.audio.set_volume` delta (approved):** the request carries exactly one of `level` (0–100) or `delta` (−100…100, relative to the current level, clamped to 0–100). The result is `{ level, muted }`. Reading the volume and muting stay on the Brain's Python path for now.
+13. **`desktop.uia.read` scope and limits (approved):**
+    - `app` is optional and defaults to the app owning the foreground window. Either way the app must be on the Body's allowlist (the same list as launch and focus); otherwise the answer is `E_NOT_ALLOWED` and the message names the app, so JARVIS can say which app it may not read.
+    - Password and other secure fields (`IsPassword`) are always removed, with their subtrees.
+    - The tree is capped (default depth 12, 300 nodes, names cut to 200 characters). `result` is `{ app, title, root, node_count, truncated }`, where each node is `{ name, control_type, automation_id, children }` and empty fields are omitted.
+14. **Desktop responses (proposed with milestone "safe desktop"):** a successful request is answered by a `response` on the **same topic** with payload `{ ok: true, result }`, validated against `protocol/topics/<topic>.response.schema.json`. A failed one is answered like a refused command: a `response` with topic `error`, `corr` set to the request `id`, and `{ ok: false, error }` (codes from the table above, plus `E_TIMEOUT` when the Brain gives up after 5 s, and a new `E_INTERNAL` for an unexpected failure on the receiving side).
+15. **Desktop capabilities and the Body allowlist (proposed):** `apps` covers `desktop.app.launch` and `desktop.window.*`, `audio` covers `desktop.audio.*`, and `uia` covers `desktop.uia.*`. The Brain sends a desktop request only to a Body that declared the capability. The Body's allowlist (`desktop.allowlist.json`, next to the Body executable) names the apps it may launch, focus or read; `desktop.window.list` lists every real window but marks each with `allowed`.
 
 ### Brain configuration (`config.yaml`, section `bbp`)
 
