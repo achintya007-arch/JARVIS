@@ -1,11 +1,11 @@
 # JARVIS
 
 A local, voice-driven AI assistant. Speech in → local LLM reasoning → tool
-execution / desktop control → speech out. Everything runs on your machine:
-the LLM is served by [Ollama](https://ollama.com), speech-to-text by
+execution / desktop control → speech out. The core runs on your machine, and
+conversations and memory stay local: the LLM is served by [Ollama](https://ollama.com), speech-to-text by
 [faster-whisper](https://github.com/SYSTRAN/faster-whisper), and text-to-speech
 by local [Piper](https://github.com/OHF-Voice/piper1-gpl) (with
-[edge-tts](https://github.com/rany2/edge-tts) as a cloud fallback).
+[edge-tts](https://github.com/rany2/edge-tts) as a cloud fallback). Weather and web search go online (wttr.in, DuckDuckGo).
 
 > **Platform:** Windows-targeted (desktop-control tools use Windows APIs).
 > **Status:** V3 (vault-centric memory + wake-word voice) is the active default; V2 remains stable.

@@ -1,13 +1,16 @@
 # JARVIS — a local, voice-driven AI assistant
 
+[![CI](https://github.com/achintya007-arch/JARVIS/actions/workflows/ci.yml/badge.svg)](https://github.com/achintya007-arch/JARVIS/actions/workflows/ci.yml)
+
 Speech in → local LLM reasoning → tool execution / desktop control → speech out.
-**Everything runs on your own machine.** No cloud API, no data leaving the box:
-the LLM is served by [Ollama](https://ollama.com), speech-to-text by
+**The core runs on your own machine:** no cloud LLM API, and your conversations
+and memory stay local. The LLM is served by [Ollama](https://ollama.com), speech-to-text by
 [faster-whisper](https://github.com/SYSTRAN/faster-whisper), text-to-speech by
 local [Piper](https://github.com/OHF-Voice/piper1-gpl) (with
 [edge-tts](https://github.com/rany2/edge-tts) as a cloud fallback), and
 long-term memory lives in a local [Obsidian](https://obsidian.md) vault + an
-on-disk vector index.
+on-disk vector index. A few tools do go online: weather (wttr.in), web search
+(DuckDuckGo), and the edge-tts voice when no local Piper voice is installed.
 
 > **Platform:** Windows-targeted (desktop-control tools use Windows APIs; the
 > core conversation loop is cross-platform).
