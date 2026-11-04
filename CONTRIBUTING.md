@@ -28,12 +28,14 @@ Run the same checks CI runs ([`.github/workflows/ci.yml`](.github/workflows/ci.y
 ```bash
 cd jarvis_v1
 ruff check .            # lint — BLOCKING in CI, must pass
-pytest tests/ -v        # 118 tests
+pytest tests/ -v        # 459 tests
 mypy .                  # type check (advisory)
 ```
 
 - **Lint is a hard gate.** `ruff` config lives in `pyproject.toml`; fix findings
   rather than adding blanket ignores.
+- **Touching `body/` or `protocol/`?** Also run `cd body; dotnet test` (needs the
+  .NET 8 SDK). CI runs it on Windows.
 - **Add tests** for new behavior. Put them in `tests/` (not the deprecated
   root-level `test_*.py` scripts). Prefer tests that run without GPU/Ollama.
 - **Keep secrets and personal data out of commits.** The user's Obsidian vault
@@ -47,7 +49,9 @@ mypy .                  # type check (advisory)
   are a deliberate, ruff-permitted style here.
 - **Security-sensitive code** (`action/agent_executor.py`): any change to the
   shell allowlist, filesystem sandbox, or confirmation flow must come with a
-  corresponding test in `tests/test_security.py`. These are fail-closed
+  corresponding test in `tests/test_security.py`. The same goes for the app
+  allowlist (`action/app_launcher.py`) and clipboard tools, tested in
+  `tests/test_injection.py`, and for the Body's allowlist (`body/`). These are fail-closed
   boundaries — keep them that way.
 - **Architecture:** build new features in V3 (`core_v3/`). V2 (`core_v2/`,
   `main.py`) is kept as the stable fallback — fix bugs there, but don't grow it.

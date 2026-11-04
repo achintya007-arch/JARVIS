@@ -106,6 +106,18 @@ notes, goals, volume) — but LLM replies and semantic recall are disabled.
 - [ ] Leave it idle a few minutes → it may volunteer a check-in
 - [ ] "what am I working on" → references your foreground window
 
+### Desktop control (needs the Body; `bbp.enabled: true`)
+Watch the JARVIS console for `desktop <topic> via body` (or `via python`).
+- [ ] "open calculator" → Calculator opens
+- [ ] Minimize it or bury it under other windows; "switch to calculator" → it comes to the front
+- [ ] With Calculator in front, "what's on my screen?" → a short description of Calculator
+- [ ] With an app that isn't on the allowlist in front (e.g. WhatsApp) → refused, naming the app
+- [ ] "set volume to 30", "volume up" → changes; the reply says if output is muted
+- [ ] "open cmd" → refused, nothing runs
+- [ ] Quit the Body; "open notepad" → still opens (`via python`)
+- [ ] `bbp.desktop_fallback: false`, Body closed → refused because the Body isn't connected
+- [ ] Remove Notepad from `desktop.allowlist.json` next to `Jarvis.Body.exe`, restart the Body; "open notepad" → refused by the Body
+
 ### Voice
 - [ ] Delivery sounds composed (the -4% cadence); voice is the deep neural one
 
@@ -128,6 +140,8 @@ notes, goals, volume) — but LLM replies and semantic recall are disabled.
 - [x] Phase D — FineWeb web-knowledge RAG (code; index build is a user step)
 - [x] Phase F — voice tuning, barge-in, ambient presence, live context
 - [x] Fixes: volume (pycaw API), goal double-response race
+- [x] Brain–Body Protocol milestones 1–2: HUD, typed input, push-to-talk, tray
+- [x] Safe desktop control through the Body (launch, focus, list, volume, `uia.read`)
 
 ### Next up
 - [ ] **Phase G — coding partner** (the big "code my stuff" capability)

@@ -63,11 +63,15 @@ hardened accordingly:
 - **`run_shell` is off by default.** When enabled it runs with `shell=False`,
   rejects shell metacharacters, and only permits an **executable allowlist**.
 - **File tools are sandboxed** to `data/workspace`; paths outside it are denied.
-- **App/URL launches are allowlisted** (`open_url` accepts http/https only).
+- **App launches are allowlisted** (`action/app_launcher.py`): a known name
+  resolves to an absolute path and starts without a shell; anything else is
+  refused. `open_url` accepts http/https only.
+- **Screen and web text is untrusted:** JARVIS never follows instructions in it.
 - **Gated actions require confirmation** via a voice/text-answerable prompt and
   **fail closed** if no confirmation channel is available.
 
-See `action/agent_executor.py` and `tests/test_security.py`.
+See `action/agent_executor.py`, `tests/test_security.py` and
+`tests/test_injection.py`.
 
 ## Prerequisites
 
@@ -113,6 +117,15 @@ Then set `web_rag.enabled: true` in `config.yaml`. Until built, JARVIS runs
 fine without it — the index is queried only for factual queries and stays off
 by default.
 
+### Optional: desktop HUD and desktop control (Brain–Body Protocol)
+
+With `bbp: {enabled: true}` in `config.yaml`, the Brain serves a local
+WebSocket for the C# Body in [`../body/`](../body/): a HUD you can type into,
+push-to-talk, and native desktop control (launch, focus, list windows, volume,
+reading the screen). Off by default; voice and text mode work without it. See
+the [root README](../README.md#optional-desktop-hud-brainbody-protocol) and
+[`../body/README.md`](../body/README.md).
+
 ## Testing
 
 Portable unit + security tests (no GPU/desktop/Ollama required):
@@ -136,13 +149,16 @@ core_v2/       V2 event-driven orchestrator (stable)
 core_v3/       V3 vault-centric orchestrator (active default) + voice state machine
 memory/        V3 vault memory layer
 data/          offline FineWeb web-index builder
-tools/         diagnostics (wake_check, mic_smoke, mic_check, voice_test, bbp_probe)
+tools/         diagnostics (wake_check, mic_smoke, mic_check, voice_test, bbp_probe,
+               desktop_bench)
 tests/         pytest suite
 ```
 
 ## Known limitations
 
 - Windows-only for desktop-control tools.
+- Switching windows can still fail when the app in front runs as administrator.
+- Reading the screen needs the Body and returns UI labels, not document text.
 - `web_search` uses DuckDuckGo's Instant Answer API and returns results for a
   limited set of queries.
 - V3 memory and vault tooling are still under construction (see the roadmap).

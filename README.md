@@ -27,7 +27,8 @@ you have `cd`'d into that directory.
   single microphone owner, barge-in (interrupt mid-reply), and follow-up mode
   (answer JARVIS's questions without repeating the wake word).
 - **Deterministic fast-path routing** (`FastRouter`) for common commands — time,
-  weather, timers, volume, launching apps/URLs — with zero LLM latency.
+  weather, timers, volume, launching apps/URLs, switching windows, "what's on my
+  screen?" — with zero LLM latency.
 - **Agentic tool use** — the LLM calls tools (system info, files, shell, web
   search, screen capture, volume, timers) through a multi-turn planning loop.
 - **Persistent memory** — conversations and facts are stored and semantically
@@ -287,12 +288,20 @@ accordingly:
 - **`run_shell` is off by default.** When enabled it runs with `shell=False`,
   rejects shell metacharacters, and permits only an **executable allowlist**.
 - **File tools are sandboxed** to `data/workspace`; paths outside it are denied.
-- **App/URL launches are allowlisted** (`open_url` accepts `http`/`https` only).
+- **App launches are allowlisted** ([`action/app_launcher.py`](jarvis_v1/action/app_launcher.py)):
+  a known name resolves to an absolute path and starts without a shell; anything
+  else is refused with `E_NOT_ALLOWED`. `open_url` accepts `http`/`https` only.
+- **The Body checks again.** With the desktop HUD connected, every desktop action
+  is checked against the Body's own allowlist too, and password fields are
+  removed before any screen content leaves it.
+- **Screen and web text is untrusted.** What `read_screen_ui` returns is labelled
+  as data; JARVIS never follows instructions found in it.
 - **Gated actions require confirmation** via a voice/text-answerable prompt and
   **fail closed** if no confirmation channel is available.
 
-See [`action/agent_executor.py`](jarvis_v1/action/agent_executor.py) and
-[`tests/test_security.py`](jarvis_v1/tests/test_security.py).
+See [`action/agent_executor.py`](jarvis_v1/action/agent_executor.py),
+[`tests/test_security.py`](jarvis_v1/tests/test_security.py) and
+[`tests/test_injection.py`](jarvis_v1/tests/test_injection.py).
 
 ## Testing
 
@@ -326,14 +335,14 @@ jarvis_v1/
 │                      #   cues; hotword (V2)
 ├── cognition/         # llm_client, decision_engine, agent_state, goals,
 │   └── agent_core/    #   context_manager, memory_store; tool-calling loop
-├── action/            # fast_router, agent_executor, obsidian_tools
+├── action/            # fast_router, agent_executor, app_launcher, obsidian_tools
 │   └── tools/         #   screen + web tools
 ├── infra/             # resource monitor (VRAM/RAM watchdog)
 ├── memory/            # V3 vault: vault, indexer, embeddings, web_rag
 ├── data/              # offline FineWeb index builder
 ├── tests/             # pytest suite (459 tests)
 ├── tools/             # diagnostics: wake_check, mic_smoke, mic_check, voice_test,
-│                      #   bbp_probe (fake Body)
+│                      #   bbp_probe (fake Body), desktop_bench
 └── docs/              # engineering design document (md + pdf)
 ```
 
@@ -346,6 +355,11 @@ A deeper module-by-module map is in
 ## Known limitations
 
 - **Windows-only** for desktop-control tools (volume, window focus, screen capture).
+- Switching windows can still fail when the app in front runs as administrator
+  (Task Manager, for example): Windows blocks input from a normal program.
+- "What's on my screen?" needs the Body and reads UI names, control types and
+  IDs, not document text, so JARVIS can describe an app but not read a document
+  aloud.
 - `web_search` uses DuckDuckGo's Instant Answer API — results are limited to the
   set of queries that API answers.
 - The default TTS (Piper) is fully local. The edge-tts fallback requires a

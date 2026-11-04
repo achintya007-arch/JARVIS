@@ -170,3 +170,14 @@ A missing or broken allowlist file means nothing is allowed.
 If the Body isn't connected, JARVIS falls back to its Python tools, unless
 `bbp.desktop_fallback: false` is set. Reading the screen has no Python
 fallback.
+
+**Limits:**
+
+- Reading the screen returns names, control types and automation IDs, not
+  values, so a document's text (what's typed in Notepad) usually isn't there.
+- `set_volume` ignores the `device` field and always uses the default output.
+- Launching isn't faster here than in Python; it runs here so the Body's
+  allowlist applies.
+
+The response shape and the capability names are amendments 14 and 15 in the
+[spec](../docs/protocol/BBP_v0.1.md#amendments-oct-15-2026), still proposed.

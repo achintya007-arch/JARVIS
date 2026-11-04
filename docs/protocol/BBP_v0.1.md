@@ -69,7 +69,7 @@ The Body says hello, the Brain answers with a full state snapshot, and heartbeat
 2. **Brain → `welcome`:** `{ "session": "…", "brain_version": "3.x", "snapshot": { voice state, agent state, active goals, pending confirmations } }`. A wrong token closes the socket with code 4401.
 3. **Heartbeat:** the Body sends `ping` every 5 s; the Brain answers `pong`. Three missed pongs means disconnected.
 4. **Reconnect:** the Body retries with backoff, and each new `welcome` snapshot lets the HUD redraw instantly without replaying history.
-5. **Capabilities matter:** the Brain only routes a desktop tool to the Body if the Body declared that capability. Otherwise the tool reports itself unavailable.
+5. **Capabilities matter:** the Brain only routes a desktop tool to the Body if the Body declared that capability. Otherwise the tool runs its Python version, or, with `bbp.desktop_fallback: false`, reports itself unavailable. `desktop.uia.read` has no Python version.
 
 **Close codes:**
 
@@ -124,19 +124,19 @@ The Brain sends a `request`, the Body acts natively and replies with a `response
 
 | Topic | Payload | Response `result` |
 | --- | --- | --- |
-| `desktop.app.launch` | `app_id` (allowlisted name) | `pid` |
-| `desktop.window.focus` | `app` or `title_contains` | `hwnd`, `title` |
-| `desktop.window.list` | none | Visible windows: `title`, `app`, `hwnd` |
-| `desktop.audio.set_volume` | `level` 0–100 **or** `delta` −100…100, optional `device` | `level`, `muted` |
+| `desktop.app.launch` | `app_id` (allowlisted name) | `pid`, `app_id` |
+| `desktop.window.focus` | `app` or `title_contains` | `hwnd`, `title`, `app`, optional `strategy` (how the foreground lock was passed) |
+| `desktop.window.list` | none | Visible windows: `title`, `app`, `hwnd`, `allowed` |
+| `desktop.audio.set_volume` | `level` 0–100 **or** `delta` −100…100, optional `device` (accepted but ignored in v0.1: always the default output) | `level`, `muted` |
 | `desktop.uia.read` | optional `app` (default: the foreground window's app), `scope` (window or focused) | Trimmed UI tree: name, control type, automation ID |
 | `desktop.uia.invoke` | `app`, `element` {`name`, `control_type`, `automation_id`} | `ok` |
 | `desktop.uia.set_text` | `app`, `element`, `text` | `ok` |
 
-A failure returns `{ "ok": false, "error": { "code", "message" } }`.
+Success returns `{ "ok": true, "result": { … } }` and a failure returns `{ "ok": false, "error": { "code", "message" } }` (amendment 14).
 
 **Safety rules:**
 
-- The Python tools in `agent_executor` keep their names and the Brain's allowlist, but become thin proxies that forward to the Body.
+- The Python tools in `agent_executor` keep their names and the Brain's allowlist, and forward to the Body when one with the capability is connected. Without one they fall back to their Python implementation, unless `bbp.desktop_fallback` is false.
 - The Body keeps its **own** allowlist of apps and control types, so a compromised or confused Brain still can't drive arbitrary software.
 - `uia.invoke` on any element whose name looks destructive or outbound (send, delete, submit, pay, post) requires a `confirm.request` first, approved by you.
 - `uia.read` trims passwords and secure fields before sending anything to the Brain.
@@ -164,8 +164,8 @@ A failure returns `{ "ok": false, "error": { "code", "message" } }`.
 2. Brain → `voice.transcript` `{ "text": "focus VS Code", "final": true }`.
 3. Brain → `voice.state` `processing`. The `FastRouter` matches it, so no LLM call.
 4. Brain → `tool.started` `{ "tool": "focus_window", "summary": "Focusing VS Code" }`.
-5. Brain → `request` `desktop.window.focus` `{ "app": "Code" }` with `id: A1`.
-6. Body checks its allowlist, focuses the window, and replies `response` `{ "ok": true, "title": "JARVIS – Visual Studio Code" }` with `corr: A1`.
+5. Brain → `request` `desktop.window.focus` `{ "app": "vscode" }` with `id: A1`.
+6. Body checks its allowlist, focuses the window, and replies `response` `desktop.window.focus` `{ "ok": true, "result": { "hwnd": 1314, "title": "JARVIS – Visual Studio Code", "app": "vscode" } }` with `corr: A1`.
 7. Brain → `tool.finished` `ok`, then `reply.chunk` "Done.", then `voice.state` `speaking`, then `idle`.
 
 ## Implementation and build order
@@ -195,6 +195,8 @@ Build read-only first, then input, then confirmations, and only then let the Bod
 4. `desktop.window.*` and `desktop.app.launch`; migrate one Python tool and compare reliability.
 5. `desktop.uia.*` with the Body-side allowlist and confirmations.
 6. Later: `sentinel.finding`, then `wss://` with per-device keys when the Brain moves off your PC.
+
+**Order actually followed (changed Oct 2026):** 1 and 2, then the read-only and low-risk half of 4 and 5 (`desktop.app.launch`, `desktop.window.*`, `desktop.audio.set_volume`, `desktop.uia.read`; none of them clicks or types into an app), then 3, then `desktop.uia.invoke` and `desktop.uia.set_text`, which need confirmations.
 
 ## Amendments (Oct 15, 2026)
 
@@ -237,3 +239,5 @@ Additive changes made while implementing milestones 1–3; `v` stays `1`.
 | `heartbeat_timeout_s` | `15` | Drop a Body that has sent nothing for this long |
 | `confirm_timeout_s` | `15` | `confirm.request.timeout_s` |
 | `speak_text_input` | `false` | Also speak replies to `input.text` |
+| `desktop_fallback` | `true` | No Body with the capability connected → run the desktop tool in Python instead of refusing |
+| `request_timeout_s` | `5` | How long the Brain waits for a desktop `response` before `E_TIMEOUT` |
