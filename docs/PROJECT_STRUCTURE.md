@@ -1,8 +1,8 @@
 # JARVIS — Project Structure
 
-A module-by-module map of the codebase. For the high-level overview and setup,
+A module-by-module map of the codebase (`jarvis_v1/`). For the high-level overview and setup,
 see the [root README](../README.md); for the full design rationale see
-[`docs/JARVIS_Design_Document_v0.1.md`](docs/JARVIS_Design_Document_v0.1.md).
+[`design/JARVIS_Design_Document_v0.1.md`](design/JARVIS_Design_Document_v0.1.md).
 
 The system is event-driven and single-process: an in-memory `EventBus` carries
 typed events between perception, cognition, action, and memory, with thin
@@ -119,22 +119,19 @@ jarvis_v1/
 │   ├── test_remote_desktop.py  # desktop requests, routing, fallback, read_screen_ui
 │   └── test_phase_f.py
 │
-├── tools/                  # Diagnostics (launched via run.ps1 flags)
-│   ├── wake_check.py       # -WakeCheck: live wake-word score meter
-│   ├── mic_smoke.py        # -MicSmoke: V3 end-to-end voice + latency
-│   ├── mic_check.py        # -MicCheck: V2 speech-capture diagnostic
-│   ├── voice_test.py       # -VoiceTest: TTS voice/rate/pitch A/B tester
-│   ├── bbp_probe.py        # fake Body: prints every BBP event (python -m tools.bbp_probe)
-│   ├── desktop_bench.py    # desktop-tool success rate + latency against real apps
-│   └── desktop_bench_body.py # the bench's Body backend (--backend body)
-│
-└── docs/
-    ├── JARVIS_Design_Document_v0.1.md
-    └── JARVIS_Design_Document_v0.1.pdf
+└── tools/                  # Diagnostics (launched via run.ps1 flags)
+    ├── wake_check.py       # -WakeCheck: live wake-word score meter
+    ├── mic_smoke.py        # -MicSmoke: V3 end-to-end voice + latency
+    ├── mic_check.py        # -MicCheck: V2 speech-capture diagnostic
+    ├── voice_test.py       # -VoiceTest: TTS voice/rate/pitch A/B tester
+    ├── bbp_probe.py        # fake Body: prints every BBP event (python -m tools.bbp_probe)
+    ├── desktop_bench.py    # desktop-tool success rate + latency against real apps
+    └── desktop_bench_body.py # the bench's Body backend (--backend body)
 ```
 
-Outside `jarvis_v1/`: `../protocol/` (BBP JSON Schemas, shared by Brain and
-Body), `../body/` (C# Windows HUD), `../docs/protocol/BBP_v0.1.md` (spec).
+Outside `jarvis_v1/`: [`protocol/`](../protocol/) (BBP JSON Schemas, shared by
+Brain and Body), [`body/`](../body/) (C# Windows HUD) and [`docs/`](./) (these
+documents, including the [BBP spec](protocol/BBP_v0.1.md)).
 
 ## Known gaps
 

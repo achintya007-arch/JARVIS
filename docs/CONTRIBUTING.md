@@ -3,7 +3,7 @@
 Thanks for your interest in the project. This guide covers local setup, the
 conventions the codebase follows, and how to get a change merged.
 
-All source lives in [`jarvis_v1/`](jarvis_v1/) — `cd` there first.
+All source lives in [`jarvis_v1/`](../jarvis_v1/) — `cd` there first.
 
 ## Development setup
 
@@ -17,13 +17,13 @@ pip install -e ".[dev]"         # app + pytest, ruff, mypy
 ```
 
 For the full runtime you also need [Ollama](https://ollama.com) with the models
-pulled (see the [root README](README.md#prerequisites)). The **test suite does
+pulled (see the [root README](../README.md#prerequisites)). The **test suite does
 not require Ollama, a GPU, or a microphone** — heavy dependencies are skipped
 via `pytest.importorskip`, so you can develop and test most changes on any machine.
 
 ## Before you open a PR
 
-Run the same checks CI runs ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+Run the same checks CI runs ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)):
 
 ```bash
 cd jarvis_v1
@@ -61,9 +61,9 @@ mypy .                  # type check (advisory)
 ## Project layout
 
 A module-by-module map is in
-[`jarvis_v1/PROJECT_STRUCTURE.md`](jarvis_v1/PROJECT_STRUCTURE.md); the design
+[`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md); the design
 rationale (with diagrams) is in
-[`jarvis_v1/docs/JARVIS_Design_Document_v0.1.md`](jarvis_v1/docs/JARVIS_Design_Document_v0.1.md).
+[`design/JARVIS_Design_Document_v0.1.md`](design/JARVIS_Design_Document_v0.1.md).
 
 ## Reporting issues
 
@@ -75,4 +75,4 @@ the mode (`wake` / `voice` / `text`).
 ## License
 
 By contributing you agree that your contributions are licensed under the
-project's [MIT License](LICENSE).
+project's [MIT License](../LICENSE).

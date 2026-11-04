@@ -1,5 +1,7 @@
 # JARVIS — Testing & Task List
 
+Run every command below from `jarvis_v1/`.
+
 ## How to run
 
 ```powershell

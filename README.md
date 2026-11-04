@@ -56,8 +56,8 @@ cognition, and action; thin adapters bridge each subsystem to the bus.
 
 Full engineering write-up — with sequence diagrams for the voice flow, memory
 pipeline, and decision pipeline — is in
-**[`jarvis_v1/docs/JARVIS_Design_Document_v0.1.md`](jarvis_v1/docs/JARVIS_Design_Document_v0.1.md)**
-(a rendered [PDF](jarvis_v1/docs/JARVIS_Design_Document_v0.1.pdf) is alongside it).
+**[`docs/design/JARVIS_Design_Document_v0.1.md`](docs/design/JARVIS_Design_Document_v0.1.md)**
+(a rendered [PDF](docs/design/JARVIS_Design_Document_v0.1.pdf) is alongside it).
 
 ### Two orchestrators
 
@@ -341,16 +341,15 @@ jarvis_v1/
 ├── memory/            # V3 vault: vault, indexer, embeddings, web_rag
 ├── data/              # offline FineWeb index builder
 ├── tests/             # pytest suite (459 tests)
-├── tools/             # diagnostics: wake_check, mic_smoke, mic_check, voice_test,
-│                      #   bbp_probe (fake Body), desktop_bench
-└── docs/              # engineering design document (md + pdf)
+└── tools/             # diagnostics: wake_check, mic_smoke, mic_check, voice_test,
+                       #   bbp_probe (fake Body), desktop_bench
 ```
 
 Next to `jarvis_v1/`: `protocol/` holds the Brain–Body Protocol JSON Schemas,
-`body/` the C# Windows HUD, and `docs/protocol/` the protocol spec.
+`body/` the C# Windows HUD, and [`docs/`](docs/) the project documents.
 
 A deeper module-by-module map is in
-[`jarvis_v1/PROJECT_STRUCTURE.md`](jarvis_v1/PROJECT_STRUCTURE.md).
+[`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md).
 
 ## Known limitations
 
@@ -370,12 +369,13 @@ A deeper module-by-module map is in
 | Document | What it covers |
 |----------|----------------|
 | [`jarvis_v1/README.md`](jarvis_v1/README.md) | Developer-focused quick reference |
-| [`jarvis_v1/PROJECT_STRUCTURE.md`](jarvis_v1/PROJECT_STRUCTURE.md) | Module-by-module layout |
-| [`jarvis_v1/docs/JARVIS_Design_Document_v0.1.md`](jarvis_v1/docs/JARVIS_Design_Document_v0.1.md) | Full engineering design + diagrams |
-| [`jarvis_v1/TESTING.md`](jarvis_v1/TESTING.md) | Test suite and how to run it |
+| [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md) | Module-by-module layout |
+| [`docs/design/JARVIS_Design_Document_v0.1.md`](docs/design/JARVIS_Design_Document_v0.1.md) | Full engineering design + diagrams |
+| [`docs/TESTING.md`](docs/TESTING.md) | Running tests, the desktop bench, hand-test checklist |
 | [`docs/protocol/BBP_v0.1.md`](docs/protocol/BBP_v0.1.md) | Brain–Body Protocol spec |
-| [`body/README.md`](body/README.md) | The Windows HUD: build, run, settings |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, conventions, PR flow |
+| [`protocol/README.md`](protocol/README.md) | The protocol's JSON Schemas |
+| [`body/README.md`](body/README.md) | The Windows HUD: build, run, settings, desktop control |
+| [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Dev setup, conventions, PR flow |
 
 ## License
 
