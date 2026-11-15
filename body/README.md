@@ -53,6 +53,7 @@ body/
 │   ├── UiTree.cs          #   trimmed, capped UI tree; password fields removed
 │   ├── UiaReader.cs       #   UI Automation (FlaUI), read-only
 │   ├── UiaActor.cs        #   UI Automation patterns: press, toggle, select, set text
+│   ├── UiMatcher.cs       #   which element you meant ("7" = Seven), "did you mean"
 │   └── RiskyNames.cs      #   "send", "delete", … (protocol/policy/risky-words.json)
 ├── src/Jarvis.Body/       # WPF HUD (UI only)
 │   ├── desktop.allowlist.json # apps the Body may launch, focus or read
@@ -202,11 +203,16 @@ A missing or broken allowlist file means nothing is allowed.
 - **Clicking and typing:** only in apps whose allowlist entry has
   `"act": true`. As shipped, that's Notepad and Calculator; add it to others
   yourself. The Body looks only in that app's own windows, and exactly one
-  element must match the name (or automation id). Two "OK" buttons means
-  JARVIS says so and asks which, rather than guessing. Password fields,
+  element must match the name (or automation id). It waits up to 2 s for an
+  app that's still opening. When no name matches exactly it tries, carefully,
+  the one you probably meant: "7" is Seven, "multiply" is Multiply by, "equal"
+  is Equals. It does that only when exactly one element fits, and never for a
+  risky one like Send. A typo gets "did you mean 'Send'?", and nothing is
+  pressed. Two "OK" buttons means JARVIS lists them and asks which, rather
+  than guessing (hidden or disabled copies don't count). Password fields,
   disabled or read-only elements, and control types other than buttons, menu
   items, links, tabs, list and tree items, checkboxes and radio buttons (and
-  edit fields, for typing) are refused. It works through UI Automation patterns,
+  edit fields or an empty document, for typing) are refused. It works through UI Automation patterns,
   so the mouse never moves and no keys are sent. An element with no suitable
   pattern is refused.
 - **Approval:** typing always asks you, and the dialog shows the whole text.

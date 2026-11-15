@@ -349,3 +349,38 @@ async def test_over_bbp_the_body_gets_the_action_and_the_matching_confirm_id(tmp
             serving.cancel()
     finally:
         await server.stop()
+
+
+# ── Reliability (amendment 22) ───────────────────────────────────────────────
+
+class TestReliability:
+    def test_clicks_and_typing_get_time_for_the_body_to_wait(self):
+        from core_v3.adapters.remote_desktop import ACTION_TIMEOUT_S, RemoteDesktop
+        remote = RemoteDesktop(server=None, timeout_s=5.0)
+        assert remote.timeout_for("desktop.uia.invoke") == ACTION_TIMEOUT_S >= 2 + 2 + 3 + 3
+        assert remote.timeout_for("desktop.uia.set_text") == ACTION_TIMEOUT_S
+        assert remote.timeout_for("desktop.uia.read") == 5.0
+        assert RemoteDesktop(server=None, timeout_s=30.0).timeout_for("desktop.uia.invoke") == 30.0
+
+    async def test_a_timeout_says_it_may_have_happened(self, tmp_path):
+        def answer(topic, payload):
+            raise DesktopError("E_TIMEOUT", "win-shell didn't answer desktop.uia.invoke within 15 s")
+        result = await _run(_executor(tmp_path, FakeRemote(answer), Asker()), "click_element",
+                            app="calculator", name="Seven")
+        assert (result["status"], result["code"]) == ("error", "E_TIMEOUT")
+        assert "can't tell whether Calculator did it" in result["error"]
+
+    async def test_the_reply_names_what_the_body_pressed(self, tmp_path):
+        def answer(topic, payload):
+            return {**_ok(topic, payload), "name": "Seven"}         # "7" matched loosely
+        result = await _run(_executor(tmp_path, FakeRemote(answer), Asker()), "click_element",
+                            app="calculator", name="7")
+        assert result["result"] == "Pressed 'Seven' in Calculator, Sir."
+
+    @pytest.mark.parametrize("code", ["E_NOT_FOUND", "E_TIMEOUT", "E_BAD_PAYLOAD"])
+    def test_findable_failures_are_said_plainly(self, code):
+        from core_v3.conversation import _format_fast_result
+        reply = _format_fast_result("click_element", {
+            "status": "error", "code": code, "error": "no element 'nine' in Calculator; did you mean 'Nine'?"})
+        assert reply == "I couldn't do that, Sir: no element 'nine' in Calculator; did you mean 'Nine'?"
+        assert _format_fast_result("click_element", {"status": "error", "code": code, "error": "Calculator has no open window"})             == "I couldn't do that, Sir: Calculator has no open window."

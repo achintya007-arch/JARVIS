@@ -8,7 +8,7 @@ Run every command below from `jarvis_v1/`.
 .\run.ps1              # V3 (vault brain), voice
 .\run.ps1 -Text        # V3, keyboard input (no mic needed) — easiest for a first check
 .\run.ps1 -V2          # V2 (stable brain)
-.\run.ps1 -Test        # run the automated test suite (672 tests)
+.\run.ps1 -Test        # run the automated test suite (678 tests)
 .\run.ps1 -VoiceTest   # A/B test TTS voice/rate/pitch without the full pipeline
 ```
 
@@ -139,7 +139,11 @@ Gated actions: `write_file`, `run_shell` (if enabled), `close_app`, `close_windo
 - [ ] "click nine in calculator" with Calculator closed → "Calculator has no open window"
 - [ ] Mark an app `"act": true`, ask JARVIS to press its **Send** or **Delete** button → a **High risk** dialog first; Deny → nothing pressed
 - [ ] Ask JARVIS to type something into a search box → the dialog shows the exact text; Approve → it's in the box, Enter not pressed
-- [ ] Two buttons with the same name → JARVIS says how many match instead of guessing
+- [ ] Two buttons with the same name → JARVIS lists them and says which differ, instead of guessing
+- [ ] Close Calculator, then "open calculator" and straight away "click seven in calculator" → pressed (it waits for the window)
+- [ ] "click 7 in calculator", "click multiply", "click equal" → Seven, Multiply by, Equals
+- [ ] "click sevn in calculator" → "did you mean 'Seven'?", nothing pressed
+- [ ] In a **new, empty** Notepad tab, ask JARVIS to type a line into Notepad's 'Text editor' → dialog shows it; Approve → it's there. In a tab that already has text → refused, nothing replaced
 
 ### Voice
 - [ ] Delivery sounds composed (the -4% cadence); voice is the deep neural one

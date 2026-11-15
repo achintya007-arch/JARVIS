@@ -754,12 +754,18 @@ class AgentExecutor:
         if asked:
             await approve()
         try:
-            result = await self._remote.call(topic, payload)
+            try:
+                result = await self._remote.call(topic, payload)
+            except DesktopError as e:
+                if e.code != "E_DENIED" or asked:
+                    raise
+                await approve(e.message)                 # the element the Body found looks risky
+                result = await self._remote.call(topic, payload)
         except DesktopError as e:
-            if e.code != "E_DENIED" or asked:
-                raise
-            await approve(e.message)                 # the element the Body found looks risky
-            result = await self._remote.call(topic, payload)
+            if e.code == "E_TIMEOUT":
+                raise DesktopError("E_TIMEOUT", f"the desktop app didn't answer in time, so I can't tell "
+                                                f"whether {display} did it; have a look") from None
+            raise
 
         name = result.get("name") or element.get("name") or element.get("automation_id")
         if tool == "click_element":

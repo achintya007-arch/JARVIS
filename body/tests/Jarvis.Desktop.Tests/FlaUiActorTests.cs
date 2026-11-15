@@ -105,6 +105,18 @@ public sealed class FlaUiActorTests : IDisposable
     }
 
     [Fact]
+    public void Candidates_AreTheNamedElementsOfThoseTypes()
+    {
+        var buttons = _actor.Candidates([_hwnd], ["Button"]).Select(c => c.Name).Order().ToList();
+        Assert.Equal(["Close", "Maximize", "Minimize", "Off", "Seven"], buttons);   // the title bar's too
+        var mixed = _actor.Candidates([_hwnd], ["Button", "CheckBox", "Edit", "Nonsense"]).Select(c => c.ControlType).ToHashSet();
+        Assert.Equal(["Button", "CheckBox", "Edit"], mixed.Order());
+        Assert.Empty(_actor.Candidates([_hwnd], ["Nonsense"]));
+        Assert.Equal(0, One(new UiElementRef("Search", "Edit")).TextLength);
+        Assert.Equal(-1, One(new UiElementRef("Seven", "Button")).TextLength);   // no text to read
+    }
+
+    [Fact]
     public void PasswordAndReadOnlyFields_SayWhatTheyAre()
     {
         Assert.True(UiTreeBuilder.IsSecure(One(new UiElementRef("Secret", "Edit"))));

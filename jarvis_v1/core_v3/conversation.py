@@ -45,12 +45,20 @@ def _clean(text: str) -> str:
     return re.sub(r" {2,}", " ", text).strip()
 
 
+# Desktop errors whose message already says what went wrong ("no Button 'nine'
+# in Calculator; did you mean 'Nine'?"): said plainly, not as "an error".
+_PLAIN_FAILURES = ("E_NOT_FOUND", "E_TIMEOUT", "E_BAD_PAYLOAD")
+
+
 def _format_fast_result(tool: str, result: dict) -> str:
     status = result.get("status")
     if status == "denied" and result.get("code") == "E_DENIED":
         return f"I didn't do it, Sir: {result.get('reason', 'it needed your approval')}."
     if status == "denied":
         return f"That action is restricted, Sir. {result.get('reason', '')}".strip()
+    if status == "error" and result.get("code") in _PLAIN_FAILURES:
+        error = str(result.get("error", "")).rstrip()
+        return f"I couldn't do that, Sir: {error}{'' if error.endswith(('.', '?', '!')) else '.'}"
     if status == "error":
         return f"I encountered an error with that, Sir. {result.get('error', '')}".strip()
     r = result.get("result", "")

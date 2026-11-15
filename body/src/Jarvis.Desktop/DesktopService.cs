@@ -43,11 +43,17 @@ public sealed class DesktopService(
     /// <summary>What desktop.uia.invoke may press, and desktop.uia.set_text may fill.</summary>
     public static readonly IReadOnlySet<string> InvokeTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         { "Button", "MenuItem", "Hyperlink", "TabItem", "ListItem", "TreeItem", "CheckBox", "RadioButton" };
-    public static readonly IReadOnlySet<string> TextTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Edit" };
+    public static readonly IReadOnlySet<string> TextTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Edit", "Document" };
 
     /// <summary>How long a press may take before the answer goes back anyway
     /// (an Invoke that opens a modal dialog can block until it closes).</summary>
     public static TimeSpan PressWait { get; set; } = TimeSpan.FromSeconds(3);
+
+    /// <summary>How long to keep looking for a window or element that isn't
+    /// there yet (an app that was just opened is still drawing).</summary>
+    public TimeSpan FindWait { get; init; } = TimeSpan.FromSeconds(2);
+
+    private static readonly TimeSpan FindPoll = TimeSpan.FromMilliseconds(250);
 
     private readonly RiskyNames _risky = risky ?? RiskyNames.FailClosed;
 
@@ -77,7 +83,7 @@ public sealed class DesktopService(
 
     public async Task<UiInvokeResult> InvokeAsync(JsonObject payload, CancellationToken ct = default)
     {
-        var (app, target, element) = FindTarget(payload, InvokeTypes, "press");
+        var (app, target, element) = await FindTargetAsync(payload, InvokeTypes, "press", ct);
         if (_risky.IsRisky(target.Name, target.AutomationId, element.Name, element.AutomationId))
             await RequireApproval(payload, "desktop.uia.invoke", element, null, $"pressing '{Label(target, element)}'", ct);
 
@@ -108,9 +114,14 @@ public sealed class DesktopService(
         var text = (string)payload["text"]!;
         if (UnsafeText(text) is { } problem)
             throw new BbpException("E_BAD_PAYLOAD", $"won't type that: {problem}");
-        var (app, target, element) = FindTarget(payload, TextTypes, "type into");
+        var (app, target, element) = await FindTargetAsync(payload, TextTypes, "type into", ct);
         if (target.IsReadOnly)
             throw new BbpException("E_NOT_ALLOWED", $"'{Label(target, element)}' in {app.Label} is read-only");
+        // Setting a value replaces everything: fine for a field, not for a document you wrote.
+        if (target.ControlType.Equals("Document", StringComparison.OrdinalIgnoreCase) && target.TextLength != 0)
+            throw new BbpException("E_NOT_ALLOWED",
+                $"'{Label(target, element)}' in {app.Label} isn't empty, and typing would replace what's there; " +
+                "JARVIS only types into an empty document (open a new tab or window first)");
         await RequireApproval(payload, "desktop.uia.set_text", element, text, $"typing into '{Label(target, element)}'", ct);
         try
         {
@@ -146,8 +157,8 @@ public sealed class DesktopService(
         return null;
     }
 
-    private (AllowedApp App, IUiTarget Target, UiElementRef Element) FindTarget(
-        JsonObject payload, IReadOnlySet<string> types, string verb)
+    private async Task<(AllowedApp App, IUiTarget Target, UiElementRef Element)> FindTargetAsync(
+        JsonObject payload, IReadOnlySet<string> types, string verb, CancellationToken ct)
     {
         var id = (string)payload["app"]!;
         var app = allowlist.Find(id) ?? throw NotAllowed(id);
@@ -155,36 +166,106 @@ public sealed class DesktopService(
             throw new BbpException("E_NOT_ALLOWED",
                 $"JARVIS may read {app.Label} but not click or type in it (\"act\": true in {DesktopAllowlist.FileName} allows it)");
         var element = payload["element"].Deserialize<UiElementRef>(BbpJson.Options)!;
-        var hwnds = windows.List().Where(w => app.Matches(w.Process, w.Title)).Select(w => w.Hwnd).ToList();
+        var label = element.Name ?? element.AutomationId ?? "";
+        var kind = element.ControlType ?? "element";
+        // Only a name is matched loosely (amendment 22); an automation id is exact or nothing.
+        var loose = element.Name is { Length: > 0 } && element.AutomationId is null;
+        IReadOnlyCollection<string> looseTypes = element.ControlType is { } t ? [t] : types;
+
+        List<IntPtr> hwnds;
+        IReadOnlyList<IUiTarget> found;
+        IReadOnlyList<IUiTarget> candidates = [];
+        UiMatcher.Rule? rule = null;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            hwnds = windows.List().Where(w => app.Matches(w.Process, w.Title)).Select(w => w.Hwnd).ToList();
+            found = [];
+            rule = null;
+            if (hwnds.Count > 0)
+            {
+                try
+                {
+                    found = actor!.Find(hwnds, element);
+                }
+                catch (ArgumentException e)
+                {
+                    throw new BbpException("E_BAD_PAYLOAD", e.Message);
+                }
+                if (found.Count == 0 && loose)
+                {
+                    candidates = actor!.Candidates(hwnds, looseTypes);
+                    if (UiMatcher.Relaxed(element.Name!, candidates) is { } hit)
+                        (rule, found) = (hit.Rule, hit.Matches);
+                }
+                if (found.Count > 0)
+                    break;
+            }
+            if (clock.Elapsed >= FindWait)
+                break;
+            await Task.Delay(FindPoll, ct);
+        }
+
         if (hwnds.Count == 0)
             throw new BbpException("E_NOT_FOUND", $"{app.Label} has no open window");
-
-        IReadOnlyList<IUiTarget> found;
-        try
-        {
-            found = actor!.Find(hwnds, element);
-        }
-        catch (ArgumentException e)
-        {
-            throw new BbpException("E_BAD_PAYLOAD", e.Message);
-        }
-        var label = element.Name ?? element.AutomationId;
-        var kind = element.ControlType ?? "element";
         if (found.Count == 0)
-            throw new BbpException("E_NOT_FOUND", $"no {kind} '{label}' in {app.Label}");
+        {
+            var close = loose ? UiMatcher.Suggest(element.Name!, candidates) : [];
+            throw new BbpException("E_NOT_FOUND", $"no {kind} '{label}' in {app.Label}" +
+                (close.Count > 0 ? $"; did you mean {string.Join(" or ", close.Select(n => $"'{n}'"))}?" : ""));
+        }
         if (found.Count > 1)
-            throw new BbpException("E_NOT_FOUND",
-                $"{(found.Count >= 10 ? "10 or more" : found.Count.ToString(CultureInfo.InvariantCulture))} elements match '{label}' in {app.Label}: " +
-                $"{string.Join(", ", found.Select(f => f.ControlType).Distinct())}; say which (control type or automation id)");
+            found = Narrow(found, types);
+        if (found.Count > 1)
+            throw Ambiguous(found, label, app.Label);
 
         var target = found[0];
+        if (rule is not null && _risky.IsRisky(target.Name, target.AutomationId))
+            throw new BbpException("E_NOT_FOUND",
+                $"nothing in {app.Label} is called exactly '{label}'; the closest is '{target.Name}', " +
+                "which needs your approval, so say its full name");
         if (UiTreeBuilder.IsSecure(target))
-            throw new BbpException("E_NOT_ALLOWED", $"'{label}' in {app.Label} is a password field");
+            throw new BbpException("E_NOT_ALLOWED", $"'{Label(target, element)}' in {app.Label} is a password field");
         if (!types.Contains(target.ControlType))
             throw new BbpException("E_NOT_ALLOWED", $"JARVIS doesn't {verb} {target.ControlType} elements");
         if (!target.IsEnabled)
-            throw new BbpException("E_NOT_ALLOWED", $"'{label}' in {app.Label} is disabled");
+            throw new BbpException("E_NOT_ALLOWED", $"'{Label(target, element)}' in {app.Label} is disabled");
         return (app, target, element);
+    }
+
+    /// <summary>Several elements match: keep only those that could be meant
+    /// (of a type JARVIS acts on, then enabled, then on screen) as long as that
+    /// leaves at least one. Stops as soon as one is left.</summary>
+    private static IReadOnlyList<IUiTarget> Narrow(IReadOnlyList<IUiTarget> found, IReadOnlySet<string> types)
+    {
+        Func<IUiTarget, bool>[] filters = [f => types.Contains(f.ControlType), f => f.IsEnabled, f => !f.IsOffscreen];
+        foreach (var keep in filters)
+        {
+            var kept = found.Where(keep).ToList();
+            if (kept.Count > 0)
+                found = kept;
+            if (found.Count == 1)
+                break;
+        }
+        return found;
+    }
+
+    /// <summary>An automation id you could say: not empty and not just digits
+    /// (WinForms numbers unnamed controls by window handle, new every run).</summary>
+    private static bool Meaningful(string automationId) =>
+        automationId.Length > 0 && !automationId.All(char.IsAsciiDigit);
+
+    private static BbpException Ambiguous(IReadOnlyList<IUiTarget> found, string label, string app)
+    {
+        var count = found.Count >= 10 ? "10 or more" : found.Count.ToString(CultureInfo.InvariantCulture);
+        var shown = found.Take(4).Select(f =>
+            $"'{f.Name}' ({f.ControlType}{(Meaningful(f.AutomationId) ? $", automation id {f.AutomationId}" : "")})");
+        var distinct = found.Select(f => (f.Name.ToLowerInvariant(), f.ControlType, Meaningful(f.AutomationId) ? f.AutomationId : ""))
+            .Distinct().Count() == found.Count;
+        return new BbpException("E_NOT_FOUND",
+            $"{count} elements match '{label}' in {app}: {string.Join(", ", shown)}{(found.Count > 4 ? ", …" : "")}; " +
+            (distinct ? "say which one (its full name, kind or automation id)"
+                      : "they look the same from here, so I won't guess which"));
     }
 
     private async Task RequireApproval(JsonObject payload, string topic, UiElementRef element, string? text,
