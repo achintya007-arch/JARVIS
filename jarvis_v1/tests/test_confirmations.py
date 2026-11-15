@@ -521,8 +521,8 @@ class _GatedConversation:
 
     async def respond(self, text, followup=False):
         if text == "run it":
-            ok = await self.brain._confirm_request(describe("run_shell", {"command": "git status"}))
-            yield "Done, Sir." if ok else "Understood, I won't."
+            result = await self.brain._confirm_request(describe("run_shell", {"command": "git status"}))
+            yield "Done, Sir." if result.approved else "Understood, I won't."
         else:
             yield f"You said {text}."
 

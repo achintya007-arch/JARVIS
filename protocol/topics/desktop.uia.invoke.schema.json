@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.uia.invoke.schema.json",
+  "title": "desktop.uia.invoke (request, Brain -> Body) payload",
+  "description": "Press one element of an allowlisted app (amendment 19) through UI Automation: Invoke, Toggle or SelectionItem pattern, never the mouse. An element whose name or automation id looks destructive or outbound needs confirm_id: a confirmation this Body saw approved for exactly this action (amendment 20).",
+  "type": "object",
+  "required": [
+    "app",
+    "element"
+  ],
+  "properties": {
+    "app": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "element": {
+      "type": "object",
+      "description": "Which element: name (case-insensitive, exact) and/or automation_id (exact); control_type narrows it. Exactly one element must match.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "control_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "automation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "automation_id"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "confirm_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    }
+  },
+  "additionalProperties": true
+}

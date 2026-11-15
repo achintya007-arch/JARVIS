@@ -6,6 +6,9 @@ Sprint C: speak_callback parameter — when a timer fires, Jarvis speaks
           the alert via TTS instead of just printing to console.
 Sprint D: ScreenTool wired in — screen capture, window management,
           mouse/keyboard automation, app launching.
+BBP 19–20: click_element / set_element_text press a button or fill a field in
+          an allowlisted app through the Body (UI Automation, no mouse or
+          keys), with the approval rules of action/ui_policy.py.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ import shlex
 import time
 import webbrowser
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -32,7 +35,7 @@ try:
 except Exception:
     _NVML_OK = False
 
-from action import app_launcher
+from action import app_launcher, ui_policy
 from action.confirmation import ConfirmRequest, describe
 from action.desktop_errors import DesktopError, DesktopUnavailable
 from action.tools.screen_tool import ScreenTool
@@ -46,7 +49,8 @@ SpeakCallback = Callable[[str], Awaitable[None]]
 # Returns True if the user approves the action, False to deny.
 ConfirmCallback = Callable[[str], Awaitable[bool]]
 # Same, given the whole request (prompt, detail, risk): the V3 confirmation broker.
-ConfirmRequestCallback = Callable[[ConfirmRequest], Awaitable[bool]]
+# Returns True/False, or an object with .approved and .confirm_id (a Resolution).
+ConfirmRequestCallback = Callable[[ConfirmRequest], Awaitable[Any]]
 TimerDoneCallback = Callable[[str], None]
 
 # ── Shell-safety controls ─────────────────────────────────────────────────────
@@ -135,6 +139,7 @@ class ToolPermissionContext:
                 "drag", "open_app", "close_app", "focus_window",
                 "list_windows", "minimize_window", "maximize_window",
                 "close_window", "copy_selection", "paste_text",
+                "click_element", "set_element_text",
                 "get_screen_size", "get_mouse_position", "key_down", "key_up",
             ])
         return cls(
@@ -276,7 +281,7 @@ class AgentExecutor:
                 result = await self._dispatch(tool, args)
                 results.append({"tool": tool, "status": "ok", "result": result})
             except DesktopError as e:
-                if e.code == "E_NOT_ALLOWED":
+                if e.code in ("E_NOT_ALLOWED", "E_DENIED"):
                     log.warning("Tool %s denied: %s", tool, e)
                     results.append({
                         "tool": tool, "status": "denied", "reason": str(e), "code": e.code,
@@ -454,6 +459,9 @@ class AgentExecutor:
 
         elif tool == "read_screen_ui":
             return await self._read_screen_ui(args.get("app"))
+
+        elif tool in ("click_element", "set_element_text"):
+            return await self._ui_action(tool, args)
 
         elif tool == "minimize_window":
             return await self._screen.minimize_window(str(args.get("title", "")))
@@ -688,6 +696,93 @@ class AgentExecutor:
         result = await self._remote.call("desktop.uia.read", payload)
         return format_ui_tree(result)
 
+    # ── Clicking and typing into apps (Body only: BBP amendments 19–20) ────────
+
+    async def _ui_action(self, tool: str, args: dict[str, Any]) -> str:
+        """Press an element (click_element) or replace a field's text
+        (set_element_text) in an allowlisted app, through the Body.
+
+        Approval: set_element_text always asks; click_element asks when the
+        element's name or automation id looks destructive or outbound. The
+        confirmation names the exact request, and the Body runs a request that
+        needs approval only with the confirm_id of that approval. It also checks
+        the element it really finds: if that one looks risky, it answers
+        E_DENIED and this asks once and retries."""
+        topic = "desktop.uia.invoke" if tool == "click_element" else "desktop.uia.set_text"
+        if self._remote is None or not self._remote.available(topic):
+            raise DesktopUnavailable(
+                "clicking or typing in apps needs the JARVIS desktop app (Body) to be connected, Sir")
+        limits = {"name": 200, "control_type": 40, "automation_id": 200}
+        element = {}
+        for key, limit in limits.items():
+            value = " ".join(str(args.get(key) or "").split())
+            if value and len(value) <= limit:
+                element[key] = value
+        if "name" not in element and "automation_id" not in element:
+            raise ValueError("say which element: its name (or automation id)")
+        text = None
+        if tool == "set_element_text":
+            text = str(args.get("text") or "")
+            problem = ui_policy.unsafe_text(text)
+            if problem:
+                raise DesktopError("E_BAD_PAYLOAD", f"I won't type that: {problem}")
+
+        if args.get("app"):
+            app = app_launcher.resolve_key(str(args["app"]))
+        else:
+            # Which app is in front decides what the approval names; the Body
+            # gets an explicit app either way.
+            front = await self._remote.call("desktop.uia.read", {"max_depth": 1, "max_nodes": 1})
+            app = str(front["app"])
+        known = app_launcher.ALLOWED_APPS.get(app)
+        display = known.display if known else app
+
+        payload: dict[str, Any] = {"app": app, "element": element}
+        if text is not None:
+            payload["text"] = text
+        action = {"topic": topic, **payload}
+        log.info("desktop %s via body: %s %s", topic, app, element)
+
+        async def approve(why: str = "") -> None:
+            request = describe(tool, {"app": display, "element": element, "text": text or "", "why": why})
+            approved, confirm_id = await self._ask(replace(request, action=dict(action)))
+            if not approved or not confirm_id:
+                raise DesktopError("E_DENIED", "you declined")
+            payload["confirm_id"] = confirm_id
+
+        asked = tool == "set_element_text" or ui_policy.is_risky(element.get("name"), element.get("automation_id"))
+        if asked:
+            await approve()
+        try:
+            result = await self._remote.call(topic, payload)
+        except DesktopError as e:
+            if e.code != "E_DENIED" or asked:
+                raise
+            await approve(e.message)                 # the element the Body found looks risky
+            result = await self._remote.call(topic, payload)
+
+        name = result.get("name") or element.get("name") or element.get("automation_id")
+        if tool == "click_element":
+            verb = {"toggle": "Toggled", "select": "Selected"}.get(result.get("pattern"), "Pressed")
+            return f"{verb} '{name}' in {display}, Sir."
+        return f"Typed {result.get('length', len(text or ''))} characters into '{name}' in {display}, Sir."
+
+    async def _ask(self, request: ConfirmRequest) -> tuple[bool, str]:
+        """(approved, confirm_id) for a request the Body checks against its
+        approval. Without the V3 broker there's no confirm_id: denied."""
+        if self._confirm_request is None:
+            log.warning("%s needs a confirmation the Body can check; none wired — denying.", request.tool)
+            return False, ""
+        try:
+            result = await self._confirm_request(request)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.warning("Confirmation callback failed (%s) — denying.", e)
+            return False, ""
+        approved = result is True or getattr(result, "approved", False) is True
+        return approved, str(getattr(result, "confirm_id", "") or "")
+
     # ── Clipboard ─────────────────────────────────────────────────────────────
 
     def _get_clipboard(self) -> str:
@@ -785,7 +880,8 @@ class AgentExecutor:
             return False
         try:
             if self._confirm_request is not None:
-                return await self._confirm_request(request) is True
+                result = await self._confirm_request(request)
+                return result is True or getattr(result, "approved", False) is True
             return await self._confirm(request.prompt) is True
         except asyncio.CancelledError:
             raise

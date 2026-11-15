@@ -45,6 +45,7 @@ BY_VALUES = frozenset({"body", "voice", "text", "timeout", "error"})
 class Resolution:
     approved: bool
     by: str
+    confirm_id: str = ""     # a Body checks it on the desktop request it approved (amendment 20)
 
 
 @dataclass
@@ -79,6 +80,8 @@ class ConfirmationBroker:
                     "timeout_s": left}
             if p.request.detail:
                 item["detail"] = p.request.detail
+            if p.request.action:
+                item["action"] = p.request.action
             items.append(item)
         return items
 
@@ -90,7 +93,8 @@ class ConfirmationBroker:
         self._pending[cid] = _Pending(request, self._clock() + timeout, timeout, future)
         log.info("confirmation %s: %s [%s] %s", cid[:8], request.tool, request.risk, request.detail)
         self._publish(ConfirmRequested(confirm_id=cid, prompt=request.prompt, risk=request.risk,
-                                       timeout_s=timeout, detail=request.detail))
+                                       timeout_s=timeout, detail=request.detail,
+                                       action=request.action))
         tasks = [asyncio.create_task(self._run_channel(cid, by, channel, request, timeout),
                                      name=f"confirm-{by}")
                  for by, channel in (channels or {}).items()]
@@ -138,7 +142,7 @@ class ConfirmationBroker:
             return False
         if by not in BY_VALUES:
             by = "error"
-        pending.future.set_result(Resolution(approved, by))
+        pending.future.set_result(Resolution(approved, by, cid))
         log.info("confirmation %s: %s by %s", cid[:8], "approved" if approved else "denied", by)
         self._publish(ConfirmResolved(confirm_id=cid, approved=approved, by=by))
         return True

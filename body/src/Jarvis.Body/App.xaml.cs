@@ -17,6 +17,7 @@ public partial class App : Application
     private TrayIcon? _tray;
     private GlobalHotkey? _hotkey;
     private FlaUiReader? _uiReader;
+    private FlaUiActor? _uiActor;
 
     // Confirmations (milestone 3): one dialog per pending confirm.request.
     private readonly ConfirmationTracker _confirmations = new();
@@ -50,7 +51,7 @@ public partial class App : Application
             Url = new Uri(settings.Url),
             TokenProvider = settings.ReadToken,
             ClientName = "win-shell",
-            ClientVersion = "0.4.0",
+            ClientVersion = "0.5.0",
             Capabilities = ["hud", "hotkey", .. DesktopService.Capabilities],
         }, validator);
 
@@ -59,8 +60,12 @@ public partial class App : Application
             Path.Combine(AppContext.BaseDirectory, DesktopAllowlist.FileName));
         BodyLog.Write(allowlistProblem ?? $"desktop allowlist: {allowlist.Apps.Count} apps");
         _uiReader = new FlaUiReader();
+        _uiActor = new FlaUiActor();
+        var (risky, riskyProblem) = RiskyNames.Load(Path.Combine(AppContext.BaseDirectory, RiskyNames.FileName));
+        if (riskyProblem is not null)
+            BodyLog.Write(riskyProblem);
         new DesktopService(allowlist, new Win32WindowSystem(), new ProcessLauncher(), new CoreAudioVolume(),
-                           _uiReader, BodyLog.Write).Register(client);
+                           _uiReader, BodyLog.Write, _uiActor, new ApprovalLedger(), risky).Register(client);
         client.RequestHandled += (topic, outcome, ms) => BodyLog.Write($"request {topic}: {outcome} in {ms:0} ms");
 
         // Client events arrive on worker threads; the view model lives on the UI thread.
@@ -248,6 +253,7 @@ public partial class App : Application
         _hotkey?.Dispose();
         _tray?.Dispose();
         _uiReader?.Dispose();
+        _uiActor?.Dispose();
         try
         {
             _clientTask?.Wait(TimeSpan.FromSeconds(2));

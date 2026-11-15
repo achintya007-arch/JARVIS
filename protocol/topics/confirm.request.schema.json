@@ -2,15 +2,100 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jarvis.local/bbp/v1/topics/confirm.request.schema.json",
   "title": "confirm.request (event, Brain -> Body) payload",
-  "description": "A gated action waits for your approval. No answer before timeout_s means deny. detail (amendment 17) is what exactly would run: the command, the file, the app or the window. It can come from the LLM: show it as plain text, never as markup.",
+  "description": "A gated action waits for your approval. No answer before timeout_s means deny. detail (amendment 17) is what exactly would run: the command, the file, the app or the window. It can come from the LLM: show it as plain text, never as markup. action (amendment 20), when present, is the exact desktop request this approval is for.",
   "type": "object",
-  "required": ["confirm_id", "prompt", "risk", "timeout_s"],
+  "required": [
+    "confirm_id",
+    "prompt",
+    "risk",
+    "timeout_s"
+  ],
   "properties": {
-    "confirm_id": { "type": "string", "minLength": 1 },
-    "prompt": { "type": "string", "minLength": 1, "maxLength": 500 },
-    "risk": { "enum": ["low", "high"] },
-    "timeout_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 300 },
-    "detail": { "type": "string", "maxLength": 400 }
+    "confirm_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "risk": {
+      "enum": [
+        "low",
+        "high"
+      ]
+    },
+    "timeout_s": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 300
+    },
+    "detail": {
+      "type": "string",
+      "maxLength": 400
+    },
+    "action": {
+      "type": "object",
+      "description": "Amendment 20: the exact desktop request this confirmation approves. A Body accepts a request carrying this confirm_id only if it matches (topic, app, element and text), once, within 30 s of the approval.",
+      "required": [
+        "topic",
+        "app",
+        "element"
+      ],
+      "properties": {
+        "topic": {
+          "enum": [
+            "desktop.uia.invoke",
+            "desktop.uia.set_text"
+          ]
+        },
+        "app": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "element": {
+          "type": "object",
+          "description": "Which element: name (case-insensitive, exact) and/or automation_id (exact); control_type narrows it. Exactly one element must match.",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "control_type": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "automation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "anyOf": [
+            {
+              "required": [
+                "name"
+              ]
+            },
+            {
+              "required": [
+                "automation_id"
+              ]
+            }
+          ],
+          "additionalProperties": false
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": true
 }

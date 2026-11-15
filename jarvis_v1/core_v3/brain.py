@@ -165,7 +165,7 @@ class Brain:
     def _text_mode(self) -> bool:
         return getattr(self.config, "mode", "wake") == "text"
 
-    async def _confirm_request(self, request) -> bool:
+    async def _confirm_request(self, request):
         """A gated tool asks. The broker races the Body dialogs against your
         voice (voice mode, unless the mic is muted) or the console (text mode)."""
         text_mode = self._text_mode()
@@ -186,7 +186,7 @@ class Brain:
         elif result.by == "error" and text_mode:
             print("\nJARVIS: I couldn't get a clear answer (the HUD may have closed), so I won't do it.",
                   flush=True)
-        return result.approved
+        return result               # Resolution: approved, by, confirm_id
 
     async def _orchestrator_answer(self, request, timeout: float) -> bool | None:
         return await self._orchestrator.listen_for_confirmation(request.prompt, timeout)
@@ -195,6 +195,10 @@ class Brain:
         print(f"JARVIS: {request.prompt}", flush=True)
         if request.detail:
             print(f"        > {request.detail}", flush=True)
+        if request.action and "text" in request.action:
+            print("        text to type:", flush=True)
+            for line in request.action["text"].split("\n"):
+                print(f"        | {line}", flush=True)
         while True:
             line = (await self._console.readline(f"Approve? yes/no ({timeout:.0f} s): ")).strip()
             if line:

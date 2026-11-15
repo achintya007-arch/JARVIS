@@ -273,7 +273,10 @@ With the Body connected, JARVIS's desktop tools run there with native Windows
 APIs: opening apps, switching windows (it reliably gets past Windows' focus
 lock, which the Python tool couldn't), listing windows, setting the volume, and
 answering "what's on my screen?" from the window's UI text instead of a
-screenshot. The Body only touches apps on its own allowlist
+screenshot. It can also press a named button ("click seven in calculator") or
+fill a field, without moving the mouse, in apps you've marked for it (Notepad
+and Calculator as shipped). Typing, and buttons like Send, Delete or Pay, ask
+you first. The Body only touches apps on its own allowlist
 (`body/src/Jarvis.Body/desktop.allowlist.json`); see
 [`body/README.md`](body/README.md#desktop-control). Two settings in the `bbp`
 section control this:

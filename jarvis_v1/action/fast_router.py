@@ -52,6 +52,24 @@ class FastRouter:
         r"|^what am i looking at(?:\s+(?:right now|now))?\s*[?.!]*$",
     )
 
+    # "click seven", "press the equals button", "click send in discord" →
+    # click_element (BBP amendment 19). Small local models often describe a
+    # click instead of calling the tool, so the plain phrasing is routed here;
+    # the executor and the Body decide whether it may run and whether to ask.
+    _CLICK = re.compile(
+        r"^(?:click|press|tap|hit)(?:\s+on)?\s+(?:the\s+)?(?P<name>.+?)"
+        r"(?:\s+(?P<kind>button|tab|link|checkbox|check box|menu item))?"
+        r"(?:\s+(?:in|on)\s+(?P<app>.+?))?\s*[.!]*$"
+    )
+    _CLICK_KINDS = {"button": "Button", "tab": "TabItem", "link": "Hyperlink", "checkbox": "CheckBox",
+                    "check box": "CheckBox", "menu item": "MenuItem"}
+    # Keys and coordinates stay with press_key / hotkey / click(x, y).
+    _NOT_ELEMENTS = re.compile(
+        r"^(?:enter|return|escape|esc|space|spacebar|tab|backspace|delete key|home|end|page (?:up|down)"
+        r"|up|down|left|right|(?:the )?(?:up|down|left|right) arrow|f\d{1,2}|ctrl|control|alt|shift|win|windows"
+        r"|(?:ctrl|control|alt|shift|win)\s*[+ ].*|.*\d+\s*,?\s*\d+|here|there|it|that|this|(?:a )?key|play|pause|stop|next|previous|mute|unmute)$"
+    )
+
     # "switch to chrome", "go to vs code", "focus notepad", "bring up spotify".
     # Fires only when the target is an allowlisted app (action/app_launcher);
     # anything else ("switch to dark mode") stays with the LLM.
@@ -257,6 +275,27 @@ class FastRouter:
             text = pattern.sub(replacement, text)
         return text.strip()
 
+    def _click(self, m: re.Match) -> RouteResult | None:
+        name = m.group("name").strip().strip("'\"")
+        app = m.group("app")
+        args: dict = {}
+        if app:
+            try:
+                args["app"] = app_launcher.resolve_key(re.sub(r"^(?:the|my)\s+", "", app.strip()))
+            except app_launcher.AppNotAllowed:
+                # "click save in place": not an app, so it's part of the name.
+                name = f"{name}{' ' + m.group('kind') if m.group('kind') else ''} in {app.strip()}"
+                return self._click_args(name, None, args)
+        return self._click_args(name, m.group("kind"), args)
+
+    def _click_args(self, name: str, kind: str | None, args: dict) -> RouteResult | None:
+        if not name or len(name) > 60 or self._NOT_ELEMENTS.match(name):
+            return None
+        args["name"] = name
+        if kind:
+            args["control_type"] = self._CLICK_KINDS[kind]
+        return RouteResult(tool="click_element", args=args)
+
     def _youtube_search(self, query: str) -> RouteResult:
         url = "https://www.youtube.com/results?search_query=" + quote_plus(query)
         return RouteResult(tool="open_url", args={"url": url, "name": f"YouTube search for {query}"})
@@ -291,6 +330,12 @@ class FastRouter:
 
         if self._SCREEN.search(text):
             return RouteResult(tool="read_screen_ui", args={})
+
+        m = self._CLICK.match(text)
+        if m:
+            route = self._click(m)
+            if route is not None:
+                return route
 
         m = self._FOCUS.match(text)
         if m:

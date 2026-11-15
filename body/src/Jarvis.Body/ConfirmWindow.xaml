@@ -54,6 +54,25 @@
                 <TextBlock Text="{Binding Detail}" FontFamily="Consolas" FontSize="12.5" TextWrapping="Wrap" />
             </Border>
 
+            <!-- set_element_text: exactly what would be typed, all of it (scrolls). -->
+            <Border Background="#1C232A" CornerRadius="6" Padding="8,6" Margin="0,6,0,0">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasText}" Value="False">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel>
+                    <TextBlock Text="Text to type" FontSize="11" Foreground="#8A939B" />
+                    <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto" Focusable="False">
+                        <TextBlock Text="{Binding Text}" FontFamily="Consolas" FontSize="12.5" TextWrapping="Wrap" />
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+
             <ProgressBar Value="{Binding FractionLeft, Mode=OneWay}" Minimum="0" Maximum="1" Height="3"
                          Margin="0,12,0,0" Background="#1C232A" BorderThickness="0" Foreground="#00C8E6" />
 

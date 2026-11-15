@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.uia.set_text.schema.json",
+  "title": "desktop.uia.set_text (request, Brain -> Body) payload",
+  "description": "Replace the text of one edit field of an allowlisted app (amendment 19) through the Value pattern, never keystrokes; it never presses Enter. Always needs confirm_id (amendment 20). The text may not contain control characters other than tab and newline, nor bidirectional or zero-width characters.",
+  "type": "object",
+  "required": [
+    "app",
+    "element",
+    "text",
+    "confirm_id"
+  ],
+  "properties": {
+    "app": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "element": {
+      "type": "object",
+      "description": "Which element: name (case-insensitive, exact) and/or automation_id (exact); control_type narrows it. Exactly one element must match.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "control_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "automation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "automation_id"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "text": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "confirm_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    }
+  },
+  "additionalProperties": true
+}

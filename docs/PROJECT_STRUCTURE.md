@@ -83,6 +83,7 @@ jarvis_v1/
 ├── action/
 │   ├── fast_router.py      # Deterministic fast-path for common commands
 │   ├── app_launcher.py     # THE app allowlist: name → absolute path → argv, never a shell
+│   ├── ui_policy.py        # which clicks need approval (risky words), what may be typed
 │   ├── desktop_errors.py   # DesktopError codes shared by the Python and Body paths
 │   ├── agent_executor.py   # Tool dispatcher — shell allowlist, FS sandbox,
 │   │                       #   fail-closed confirmation (security boundary)
@@ -121,6 +122,7 @@ jarvis_v1/
 │   ├── test_bbp_contract.py / test_bbp_server.py / test_bbp_events.py
 │   ├── test_bbp_commands.py / test_voice_body_controls.py
 │   ├── test_confirmations.py   # confirmation broker, console, confirm.* + notify over BBP
+│   ├── test_ui_actions.py      # click_element / set_element_text, approvals, risky words
 │   ├── test_remote_desktop.py  # desktop requests, routing, fallback, read_screen_ui
 │   └── test_phase_f.py
 │
@@ -134,8 +136,8 @@ jarvis_v1/
     └── desktop_bench_body.py # the bench's Body backend (--backend body)
 ```
 
-Outside `jarvis_v1/`: [`protocol/`](../protocol/) (BBP JSON Schemas, shared by
-Brain and Body), [`body/`](../body/) (C# Windows HUD) and [`docs/`](./) (these
+Outside `jarvis_v1/`: [`protocol/`](../protocol/) (BBP JSON Schemas and the
+risky-word list in `policy/`, shared by Brain and Body), [`body/`](../body/) (C# Windows HUD) and [`docs/`](./) (these
 documents, including the [BBP spec](protocol/BBP_v0.1.md)).
 
 ## Known gaps

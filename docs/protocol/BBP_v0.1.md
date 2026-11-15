@@ -129,8 +129,8 @@ The Brain sends a `request`, the Body acts natively and replies with a `response
 | `desktop.window.list` | none | Visible windows: `title`, `app`, `hwnd`, `allowed` |
 | `desktop.audio.set_volume` | `level` 0–100 **or** `delta` −100…100, optional `device` (accepted but ignored in v0.1: always the default output) | `level`, `muted` |
 | `desktop.uia.read` | optional `app` (default: the foreground window's app), `scope` (window or focused) | Trimmed UI tree: name, control type, automation ID |
-| `desktop.uia.invoke` | `app`, `element` {`name`, `control_type`, `automation_id`} | `ok` |
-| `desktop.uia.set_text` | `app`, `element`, `text` | `ok` |
+| `desktop.uia.invoke` | `app`, `element` {`name`, `control_type`, `automation_id`}, `confirm_id` when risky (amendments 19–20) | `app`, `name`, `control_type`, `automation_id`, `pattern` |
+| `desktop.uia.set_text` | `app`, `element`, `text`, `confirm_id` (amendments 19–20) | `app`, `name`, `control_type`, `automation_id`, `length` |
 
 Success returns `{ "ok": true, "result": { … } }` and a failure returns `{ "ok": false, "error": { "code", "message" } }` (amendment 14).
 
@@ -200,7 +200,7 @@ Build read-only first, then input, then confirmations, and only then let the Bod
 
 ## Amendments (Oct 15, 2026)
 
-Additive changes made while implementing milestones 1–3; `v` stays `1`.
+Additive changes made while implementing milestones 1–4; `v` stays `1`.
 
 1. **Session topics:** for `hello`, `welcome`, `ping` and `pong`, `topic` equals `kind`.
 2. **Command errors:** an unacceptable command gets a `response` with `topic: "error"`, `corr` set to the command's `id`, and an `{ ok: false, error }` payload.
@@ -226,8 +226,8 @@ Additive changes made while implementing milestones 1–3; `v` stays `1`.
     - `app` is optional and defaults to the app owning the foreground window. Either way the app must be on the Body's allowlist (the same list as launch and focus); otherwise the answer is `E_NOT_ALLOWED` and the message names the app, so JARVIS can say which app it may not read.
     - Password and other secure fields (`IsPassword`) are always removed, with their subtrees.
     - The tree is capped (default depth 12, 300 nodes, names cut to 200 characters). `result` is `{ app, title, root, node_count, truncated }`, where each node is `{ name, control_type, automation_id, children }` and empty fields are omitted.
-14. **Desktop responses (proposed with milestone "safe desktop"):** a successful request is answered by a `response` on the **same topic** with payload `{ ok: true, result }`, validated against `protocol/topics/<topic>.response.schema.json`. A failed one is answered like a refused command: a `response` with topic `error`, `corr` set to the request `id`, and `{ ok: false, error }` (codes from the table above, plus `E_TIMEOUT` when the Brain gives up after 5 s, and a new `E_INTERNAL` for an unexpected failure on the receiving side).
-15. **Desktop capabilities and the Body allowlist (proposed):** `apps` covers `desktop.app.launch` and `desktop.window.*`, `audio` covers `desktop.audio.*`, and `uia` covers `desktop.uia.*`. The Brain sends a desktop request only to a Body that declared the capability. The Body's allowlist (`desktop.allowlist.json`, next to the Body executable) names the apps it may launch, focus or read; `desktop.window.list` lists every real window but marks each with `allowed`.
+14. **Desktop responses (approved, milestone 4):** a successful request is answered by a `response` on the **same topic** with payload `{ ok: true, result }`, validated against `protocol/topics/<topic>.response.schema.json`. A failed one is answered like a refused command: a `response` with topic `error`, `corr` set to the request `id`, and `{ ok: false, error }` (codes from the table above, plus `E_TIMEOUT` when the Brain gives up after 5 s, and a new `E_INTERNAL` for an unexpected failure on the receiving side).
+15. **Desktop capabilities and the Body allowlist (approved, milestone 4):** `apps` covers `desktop.app.launch` and `desktop.window.*`, `audio` covers `desktop.audio.*`, and `uia` covers `desktop.uia.*`. The Brain sends a desktop request only to a Body that declared the capability. The Body's allowlist (`desktop.allowlist.json`, next to the Body executable) names the apps it may launch, focus or read; `desktop.window.list` lists every real window but marks each with `allowed`.
 
 16. **Confirmation answers (approved, milestone 3):**
     - `confirm.response` with a `confirm_id` that isn't pending (unknown, already answered, or timed out) is refused with `E_NOT_FOUND`. The first answer wins; later ones change nothing.
@@ -244,6 +244,19 @@ Additive changes made while implementing milestones 1–3; `v` stays `1`.
     | Timer finished | `warn` | Timer |
     | Resource pressure starts (model switch) | `alert` | Resource pressure |
     | Resource pressure clears | `info` | Resources |
+
+19. **`desktop.uia.invoke` and `desktop.uia.set_text` (approved, milestone 4):**
+    - `app` is required: an id on the Body's allowlist whose entry also has `"act": true`. Reading an app doesn't allow acting in it; the shipped list allows acting only in Notepad and Calculator. Otherwise `E_NOT_ALLOWED`. When you don't name an app, the Brain asks `desktop.uia.read` which app is in front, so the confirmation can name it, and sends that id.
+    - `element` has `name` (exact, case-insensitive) and/or `automation_id` (exact); `control_type` narrows it. The Body searches only that app's own windows. Exactly one element must match: none, or more than one, is `E_NOT_FOUND`, and the message says how many match so JARVIS can ask which. Nothing is guessed.
+    - Refused with `E_NOT_ALLOWED`: password and other secure fields, disabled elements, read-only fields, and control types outside the Body's lists. Invoke: Button, MenuItem, Hyperlink, TabItem, ListItem, TreeItem, CheckBox, RadioButton. Set text: Edit.
+    - Invoke uses UI Automation patterns only: Toggle first for a checkbox; SelectionItem first for list, tree and tab items and radio buttons (Invoke on a list item would *open* it); Invoke first for everything else. An element with none of them is `E_NOT_ALLOWED`: the Body never moves the mouse or sends keys. The result names the element and the `pattern` used (`invoke`, `toggle`, `select`).
+    - `set_text` replaces the field's text through the Value pattern and never presses Enter. `text` is at most 2000 characters, and may contain no control characters other than tab and newline, and no bidirectional or zero-width characters (`E_BAD_PAYLOAD`), so the dialog shows exactly what is typed.
+20. **Approvals bound to the request (approved, milestone 4):**
+    - `desktop.uia.set_text` always needs approval (risk `low`). `desktop.uia.invoke` needs approval (risk `high`) when the element's name or automation id looks destructive or outbound. The words are in [`protocol/policy/risky-words.json`](../../protocol/policy/risky-words.json), shared by the Brain and the Body, together with examples both test suites check. Matching ignores case, full-width letters, accents, zero-width characters and common Cyrillic/Greek look-alikes, splits camelCase, and accepts the endings -s, -es, -ed, -d and -ing. A word mixing Latin with other letters counts as risky. If the list can't be loaded, everything is risky.
+    - `confirm.request` gains an optional `action` `{ topic, app, element, text? }`: the exact desktop request it approves. `welcome` `pending_confirmations` items carry it too. The Body shows `action.text` in full in the dialog.
+    - The desktop request carries `confirm_id`. The Body runs it only if it saw that `confirm.request` and then a `confirm.resolved` with `approved: true`, the action matches exactly (topic, app id, element fields and text), the approval is less than 30 s old, and it hasn't been used. Otherwise `E_DENIED`, with the reason. If the `confirm.resolved` hasn't arrived yet, the Body waits up to 2 s for it, because the Brain may queue it just after the request. Approvals are forgotten when the link drops.
+    - The Body checks the element it actually finds, not just what the Brain asked for. If that element looks risky and the request has no valid approval, the answer is `E_DENIED`. The Brain then asks you once, saying why, and retries with the new `confirm_id`.
+21. **Brain tools (approved, milestone 4):** `click_element` and `set_element_text` (arguments `app?`, `name`, `control_type?`, `automation_id?`, and `text`) map to the two requests. They work only through a connected Body; there is no Python fallback. They are off when `agent.screen_enabled` is false. "click X", "press the X button", "click X in <app>" and similar phrases are routed to `click_element` without the LLM. Key names ("press enter"), coordinates and media words stay with the existing tools. A declined or refused approval reads "I didn't do it, Sir: …".
 
 ### Brain configuration (`config.yaml`, section `bbp`)
 

@@ -93,3 +93,20 @@ public class ConfirmDialogTests
     public void TrayNotification_NeedsText() =>
         Assert.Equal("Timer", NotificationView.TrayText("Timer", " "));
 }
+
+/// <summary>set_element_text (amendment 20): the dialog shows the whole text that would be typed.</summary>
+public class ConfirmDialogTextTests
+{
+    [Fact]
+    public void TypingDialogs_ShowTheExactText()
+    {
+        var now = new DateTimeOffset(2026, 11, 16, 9, 0, 0, TimeSpan.Zero);
+        var typing = new ConfirmationDialog("c1", "About to type into 'Search' in Notepad. Shall I proceed, Sir?",
+                                            "Notepad › Edit 'Search' ← 11 characters", "low", 15, now.AddSeconds(15),
+                                            "hello\nworld");
+        var m = new ConfirmDialogModel(typing, () => now);
+        Assert.True(m.HasText);
+        Assert.Equal("hello\nworld", m.Text);
+        Assert.False(new ConfirmDialogModel(typing with { Text = null }, () => now).HasText);
+    }
+}

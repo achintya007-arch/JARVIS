@@ -4,36 +4,88 @@
   "title": "welcome (Brain -> Body) payload",
   "description": "Answer to a valid hello. The snapshot lets the HUD redraw instantly without replaying history.",
   "type": "object",
-  "required": ["session", "brain_version", "snapshot"],
+  "required": [
+    "session",
+    "brain_version",
+    "snapshot"
+  ],
   "properties": {
-    "session": { "type": "string", "minLength": 1 },
-    "brain_version": { "type": "string", "minLength": 1 },
+    "session": {
+      "type": "string",
+      "minLength": 1
+    },
+    "brain_version": {
+      "type": "string",
+      "minLength": 1
+    },
     "snapshot": {
       "type": "object",
-      "required": ["voice", "agent", "active_goals", "pending_confirmations"],
+      "required": [
+        "voice",
+        "agent",
+        "active_goals",
+        "pending_confirmations"
+      ],
       "properties": {
         "voice": {
           "type": "object",
-          "required": ["state", "muted"],
+          "required": [
+            "state",
+            "muted"
+          ],
           "properties": {
-            "state": { "enum": ["idle", "listening", "processing", "speaking", "interrupted"] },
-            "muted": { "type": "boolean" }
+            "state": {
+              "enum": [
+                "idle",
+                "listening",
+                "processing",
+                "speaking",
+                "interrupted"
+              ]
+            },
+            "muted": {
+              "type": "boolean"
+            }
           },
           "additionalProperties": true
         },
         "agent": {
           "type": "object",
-          "required": ["mood", "intent", "model", "load"],
+          "required": [
+            "mood",
+            "intent",
+            "model",
+            "load"
+          ],
           "properties": {
-            "mood": { "type": "string" },
-            "intent": { "type": "string" },
-            "model": { "type": "string" },
+            "mood": {
+              "type": "string"
+            },
+            "intent": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
             "load": {
               "type": "object",
-              "required": ["ram_pct", "vram_pct"],
+              "required": [
+                "ram_pct",
+                "vram_pct"
+              ],
               "properties": {
-                "ram_pct": { "type": ["number", "null"] },
-                "vram_pct": { "type": ["number", "null"] }
+                "ram_pct": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "vram_pct": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
               },
               "additionalProperties": true
             }
@@ -44,10 +96,17 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["name", "priority"],
+            "required": [
+              "name",
+              "priority"
+            ],
             "properties": {
-              "name": { "type": "string" },
-              "priority": { "type": "integer" }
+              "name": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "integer"
+              }
             },
             "additionalProperties": true
           }
@@ -57,13 +116,95 @@
           "description": "Each item has the confirm.request payload shape; timeout_s is the time left when the snapshot was taken.",
           "items": {
             "type": "object",
-            "required": ["confirm_id", "prompt", "risk", "timeout_s"],
+            "required": [
+              "confirm_id",
+              "prompt",
+              "risk",
+              "timeout_s"
+            ],
             "properties": {
-              "confirm_id": { "type": "string", "minLength": 1 },
-              "prompt": { "type": "string" },
-              "risk": { "enum": ["low", "high"] },
-              "timeout_s": { "type": "number", "exclusiveMinimum": 0 },
-              "detail": { "type": "string", "maxLength": 400 }
+              "confirm_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "prompt": {
+                "type": "string"
+              },
+              "risk": {
+                "enum": [
+                  "low",
+                  "high"
+                ]
+              },
+              "timeout_s": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "detail": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "action": {
+                "type": "object",
+                "description": "Amendment 20: the exact desktop request this confirmation approves. A Body accepts a request carrying this confirm_id only if it matches (topic, app, element and text), once, within 30 s of the approval.",
+                "required": [
+                  "topic",
+                  "app",
+                  "element"
+                ],
+                "properties": {
+                  "topic": {
+                    "enum": [
+                      "desktop.uia.invoke",
+                      "desktop.uia.set_text"
+                    ]
+                  },
+                  "app": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "element": {
+                    "type": "object",
+                    "description": "Which element: name (case-insensitive, exact) and/or automation_id (exact); control_type narrows it. Exactly one element must match.",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "control_type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                      },
+                      "automation_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
+                    },
+                    "anyOf": [
+                      {
+                        "required": [
+                          "name"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "automation_id"
+                        ]
+                      }
+                    ],
+                    "additionalProperties": false
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                },
+                "additionalProperties": false
+              }
             },
             "additionalProperties": true
           }

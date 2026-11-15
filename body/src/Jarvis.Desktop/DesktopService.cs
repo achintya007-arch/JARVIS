@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Bbp.Client;
 
@@ -10,12 +12,20 @@ public sealed record WindowInfo(string Title, string App, long Hwnd, bool Allowe
 public sealed record WindowListResult(IReadOnlyList<WindowInfo> Windows);
 public sealed record VolumeResult(int Level, bool Muted);
 public sealed record UiReadResult(string App, string Title, UiNode Root, int NodeCount, bool Truncated);
+public sealed record UiInvokeResult(string App, string Name, string ControlType, string AutomationId, string Pattern);
+public sealed record UiSetTextResult(string App, string Name, string ControlType, string AutomationId, int Length);
 
 /// <summary>
 /// The Body's desktop.* request handlers. Every app-touching action checks the
 /// Body's own allowlist first (E_NOT_ALLOWED, naming the app); nothing a
 /// request carries is executed — launch takes an allowlist id, focus/read
 /// resolve to a window whose owning app must be allowlisted.
+///
+/// desktop.uia.invoke / set_text (amendments 19–20) also need the app's
+/// <c>act</c> flag, an allowed control type, exactly one matching element that
+/// isn't a password field, disabled or read-only, and, for a risky element or
+/// any typing, the confirm_id of an approval this Body saw for exactly that
+/// request (ApprovalLedger). UIA patterns only: no mouse, no keys.
 /// </summary>
 public sealed class DesktopService(
     DesktopAllowlist allowlist,
@@ -23,8 +33,24 @@ public sealed class DesktopService(
     IAppLauncher launcher,
     IVolume volume,
     IUiReader reader,
-    Action<string>? log = null)
+    Action<string>? log = null,
+    IUiActor? actor = null,
+    ApprovalLedger? approvals = null,
+    RiskyNames? risky = null)
 {
+    public const int MaxText = 2000;
+
+    /// <summary>What desktop.uia.invoke may press, and desktop.uia.set_text may fill.</summary>
+    public static readonly IReadOnlySet<string> InvokeTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        { "Button", "MenuItem", "Hyperlink", "TabItem", "ListItem", "TreeItem", "CheckBox", "RadioButton" };
+    public static readonly IReadOnlySet<string> TextTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Edit" };
+
+    /// <summary>How long a press may take before the answer goes back anyway
+    /// (an Invoke that opens a modal dialog can block until it closes).</summary>
+    public static TimeSpan PressWait { get; set; } = TimeSpan.FromSeconds(3);
+
+    private readonly RiskyNames _risky = risky ?? RiskyNames.FailClosed;
+
     /// <summary>hello capabilities this service provides (amendment 15).</summary>
     public static readonly string[] Capabilities = ["apps", "audio", "uia"];
 
@@ -35,7 +61,144 @@ public sealed class DesktopService(
         client.HandleRequests("desktop.window.list", (_, _) => Task.FromResult<object>(List()));
         client.HandleRequests("desktop.audio.set_volume", (r, _) => Task.FromResult<object>(SetVolume(r.Payload)));
         client.HandleRequests("desktop.uia.read", (r, _) => Task.FromResult<object>(Read(r.Payload)));
+        if (actor is null || approvals is null)
+            return;
+        client.HandleRequests("desktop.uia.invoke", async (r, ct) => await InvokeAsync(r.Payload, ct));
+        client.HandleRequests("desktop.uia.set_text", async (r, ct) => await SetTextAsync(r.Payload, ct));
+        // On the receive loop, in order: an approval is recorded before the request that uses it.
+        client.EventReceived += approvals.Apply;
+        client.Welcomed += approvals.ApplyWelcome;
+        client.StateChanged += (state, _) =>
+        {
+            if (state != ConnectionState.Connected)
+                approvals.Clear();
+        };
     }
+
+    public async Task<UiInvokeResult> InvokeAsync(JsonObject payload, CancellationToken ct = default)
+    {
+        var (app, target, element) = FindTarget(payload, InvokeTypes, "press");
+        if (_risky.IsRisky(target.Name, target.AutomationId, element.Name, element.AutomationId))
+            await RequireApproval(payload, "desktop.uia.invoke", element, null, $"pressing '{Label(target, element)}'", ct);
+
+        var press = Task.Run(target.Press, ct);
+        string pattern;
+        try
+        {
+            pattern = await press.WaitAsync(PressWait, ct);
+        }
+        catch (TimeoutException)
+        {
+            pattern = "invoke";                 // pressed; the app is still busy with it
+        }
+        catch (NotSupportedException e)
+        {
+            throw new BbpException("E_NOT_ALLOWED", $"'{Label(target, element)}' in {app.Label}: {e.Message}");
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            throw new BbpException("E_INTERNAL", $"pressing '{Label(target, element)}' failed: {e.Message}");
+        }
+        log?.Invoke($"desktop: pressed {app.Id} {target.ControlType} '{Label(target, element)}' ({pattern})");
+        return new UiInvokeResult(app.Id, target.Name, target.ControlType, target.AutomationId, pattern);
+    }
+
+    public async Task<UiSetTextResult> SetTextAsync(JsonObject payload, CancellationToken ct = default)
+    {
+        var text = (string)payload["text"]!;
+        if (UnsafeText(text) is { } problem)
+            throw new BbpException("E_BAD_PAYLOAD", $"won't type that: {problem}");
+        var (app, target, element) = FindTarget(payload, TextTypes, "type into");
+        if (target.IsReadOnly)
+            throw new BbpException("E_NOT_ALLOWED", $"'{Label(target, element)}' in {app.Label} is read-only");
+        await RequireApproval(payload, "desktop.uia.set_text", element, text, $"typing into '{Label(target, element)}'", ct);
+        try
+        {
+            await Task.Run(() => target.SetText(text), ct).WaitAsync(PressWait, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            throw new BbpException("E_INTERNAL", $"typing into '{Label(target, element)}' failed: {e.Message}");
+        }
+        log?.Invoke($"desktop: typed {text.Length} characters into {app.Id} {target.ControlType} '{Label(target, element)}'");
+        return new UiSetTextResult(app.Id, target.Name, target.ControlType, target.AutomationId, text.Length);
+    }
+
+    /// <summary>Null when text may be typed: no control characters except tab
+    /// and newline, no bidirectional or zero-width characters (so the dialog
+    /// shows exactly what is typed), at most <see cref="MaxText"/> characters.</summary>
+    public static string? UnsafeText(string text)
+    {
+        if (text.Length > MaxText)
+            return $"it's {text.Length} characters; the limit is {MaxText}";
+        foreach (var c in text)
+        {
+            if (c is '\t' or '\n')
+                continue;
+            if (c is (>= '\u202A' and <= '\u202E') or (>= '\u2066' and <= '\u2069') or '\u200E' or '\u200F' or '\u061C')
+                return "it contains a right-to-left override character";
+            var cat = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (cat == UnicodeCategory.Control)
+                return "it contains a control character";
+            if (cat == UnicodeCategory.Format)
+                return "it contains an invisible formatting character";
+        }
+        return null;
+    }
+
+    private (AllowedApp App, IUiTarget Target, UiElementRef Element) FindTarget(
+        JsonObject payload, IReadOnlySet<string> types, string verb)
+    {
+        var id = (string)payload["app"]!;
+        var app = allowlist.Find(id) ?? throw NotAllowed(id);
+        if (!app.Act)
+            throw new BbpException("E_NOT_ALLOWED",
+                $"JARVIS may read {app.Label} but not click or type in it (\"act\": true in {DesktopAllowlist.FileName} allows it)");
+        var element = payload["element"].Deserialize<UiElementRef>(BbpJson.Options)!;
+        var hwnds = windows.List().Where(w => app.Matches(w.Process, w.Title)).Select(w => w.Hwnd).ToList();
+        if (hwnds.Count == 0)
+            throw new BbpException("E_NOT_FOUND", $"{app.Label} has no open window");
+
+        IReadOnlyList<IUiTarget> found;
+        try
+        {
+            found = actor!.Find(hwnds, element);
+        }
+        catch (ArgumentException e)
+        {
+            throw new BbpException("E_BAD_PAYLOAD", e.Message);
+        }
+        var label = element.Name ?? element.AutomationId;
+        var kind = element.ControlType ?? "element";
+        if (found.Count == 0)
+            throw new BbpException("E_NOT_FOUND", $"no {kind} '{label}' in {app.Label}");
+        if (found.Count > 1)
+            throw new BbpException("E_NOT_FOUND",
+                $"{(found.Count >= 10 ? "10 or more" : found.Count.ToString(CultureInfo.InvariantCulture))} elements match '{label}' in {app.Label}: " +
+                $"{string.Join(", ", found.Select(f => f.ControlType).Distinct())}; say which (control type or automation id)");
+
+        var target = found[0];
+        if (UiTreeBuilder.IsSecure(target))
+            throw new BbpException("E_NOT_ALLOWED", $"'{label}' in {app.Label} is a password field");
+        if (!types.Contains(target.ControlType))
+            throw new BbpException("E_NOT_ALLOWED", $"JARVIS doesn't {verb} {target.ControlType} elements");
+        if (!target.IsEnabled)
+            throw new BbpException("E_NOT_ALLOWED", $"'{label}' in {app.Label} is disabled");
+        return (app, target, element);
+    }
+
+    private async Task RequireApproval(JsonObject payload, string topic, UiElementRef element, string? text,
+                                       string what, CancellationToken ct)
+    {
+        var confirmId = payload["confirm_id"] is JsonValue v ? (string?)v : null;
+        var action = new ConfirmAction(topic, (string)payload["app"]!, element, text);
+        var refusal = await approvals!.CheckAsync(confirmId, action, ct);
+        if (refusal is not null)
+            throw new BbpException("E_DENIED", $"{what} needs your approval: {refusal}");
+    }
+
+    private static string Label(IUiTarget target, UiElementRef element) =>
+        target.Name.Length > 0 ? target.Name : element.Name ?? element.AutomationId ?? target.AutomationId;
 
     public LaunchResult Launch(JsonObject payload)
     {

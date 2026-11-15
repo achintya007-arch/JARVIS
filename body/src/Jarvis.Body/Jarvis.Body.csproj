@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Jarvis.Body</AssemblyName>
     <RootNamespace>Jarvis.Body</RootNamespace>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <!-- WinForms/System.Drawing names clash with WPF ones (Application,

@@ -11,6 +11,10 @@
     <PackageReference Include="FlaUI.UIA3" Version="4.0.0" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The risky-word list shared with the Brain (BBP amendment 20). -->
+    <None Include="..\..\..\protocol\policy\risky-words.json" Link="risky-words.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Bbp.Client\Bbp.Client.csproj" />
   </ItemGroup>
   <ItemGroup>

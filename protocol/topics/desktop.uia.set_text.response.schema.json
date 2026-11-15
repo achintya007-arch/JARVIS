@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.uia.set_text.response.schema.json",
+  "title": "desktop.uia.set_text (response) payload",
+  "type": "object",
+  "required": [
+    "ok",
+    "result"
+  ],
+  "properties": {
+    "ok": {
+      "const": true
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "app",
+        "control_type",
+        "length"
+      ],
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "control_type": {
+          "type": "string"
+        },
+        "automation_id": {
+          "type": "string"
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

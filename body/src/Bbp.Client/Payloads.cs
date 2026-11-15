@@ -21,7 +21,8 @@ public sealed record LoadSnapshot(double? RamPct, double? VramPct);
 public sealed record GoalSnapshot(string Name, int Priority);
 
 /// <summary>A confirm.request still waiting; in the welcome snapshot TimeoutS is the time left.</summary>
-public sealed record PendingConfirmation(string ConfirmId, string Prompt, string Risk, double TimeoutS, string? Detail = null);
+public sealed record PendingConfirmation(string ConfirmId, string Prompt, string Risk, double TimeoutS, string? Detail = null,
+                                         ConfirmAction? Action = null);
 
 public sealed record VoiceStatePayload(string State, bool Muted);
 

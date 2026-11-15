@@ -2,7 +2,7 @@
 RemoteDesktop — the Brain's client for desktop.* requests to the C# Body.
 
 AgentExecutor's desktop tools (open_app, focus_window, list_windows,
-set_volume, read_screen_ui) ask `available(topic)`; when a connected Body
+set_volume, read_screen_ui, click_element, set_element_text) ask `available(topic)`; when a connected Body
 declared the matching capability they call `call(topic, payload)` instead of the
 Python implementation. Errors come back as DesktopError with the Body's code
 (E_NOT_ALLOWED, E_NOT_FOUND, E_TIMEOUT after 5 s, …).
@@ -22,6 +22,8 @@ CAPABILITY = {
     "desktop.window.list": "apps",
     "desktop.audio.set_volume": "audio",
     "desktop.uia.read": "uia",
+    "desktop.uia.invoke": "uia",
+    "desktop.uia.set_text": "uia",
 }
 
 

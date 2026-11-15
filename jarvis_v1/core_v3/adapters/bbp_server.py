@@ -312,6 +312,8 @@ class BBPServer:
                    "timeout_s": ev.timeout_s}
         if ev.detail:
             payload["detail"] = ev.detail
+        if ev.action:
+            payload["action"] = ev.action
         self.broadcast_event("confirm.request", payload)
 
     async def _on_confirm_resolved(self, ev: ConfirmResolved) -> None:

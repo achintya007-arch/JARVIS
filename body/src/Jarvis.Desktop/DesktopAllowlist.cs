@@ -66,6 +66,8 @@ public sealed class DesktopAllowlist
 /// <param name="Processes">Process image names whose windows belong to this app.</param>
 /// <param name="Titles">Optional: the window title must contain one of these
 /// (for hosted apps, e.g. UWP windows owned by ApplicationFrameHost.exe).</param>
+/// <param name="Act">JARVIS may also press elements and type into fields of
+/// this app (desktop.uia.invoke / set_text, amendment 19). Off unless set.</param>
 public sealed record AllowedApp(
     string Id,
     string Display,
@@ -75,7 +77,8 @@ public sealed record AllowedApp(
     string? Uri = null,
     IReadOnlyList<string>? Processes = null,
     IReadOnlyList<string>? Titles = null,
-    IReadOnlyList<string>? Aliases = null)
+    IReadOnlyList<string>? Aliases = null,
+    bool Act = false)
 {
     [JsonIgnore]
     public string Label => string.IsNullOrEmpty(Display) ? Id : Display;

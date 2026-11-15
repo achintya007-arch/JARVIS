@@ -8,7 +8,7 @@ Run every command below from `jarvis_v1/`.
 .\run.ps1              # V3 (vault brain), voice
 .\run.ps1 -Text        # V3, keyboard input (no mic needed) — easiest for a first check
 .\run.ps1 -V2          # V2 (stable brain)
-.\run.ps1 -Test        # run the automated test suite (560 tests)
+.\run.ps1 -Test        # run the automated test suite (672 tests)
 .\run.ps1 -VoiceTest   # A/B test TTS voice/rate/pitch without the full pipeline
 ```
 
@@ -132,6 +132,15 @@ Gated actions: `write_file`, `run_shell` (if enabled), `close_app`, `close_windo
 - [ ] "close calculator" → the dialog says **High risk**; Tab can't reach Approve, only a click can
 - [ ] "set a timer for 10 seconds" → when it goes off: a card on the HUD and a Windows notification
 
+### Clicking and typing in apps (needs the Body)
+- [ ] "open calculator", then "click one in calculator", "click plus", "click two", "click equals" → 3, no dialog, the mouse doesn't move
+- [ ] "press the equals button in calculator" → pressed (narrowed to a Button)
+- [ ] "click compose in chrome" → refused: Chrome isn't marked `act` in `desktop.allowlist.json`
+- [ ] "click nine in calculator" with Calculator closed → "Calculator has no open window"
+- [ ] Mark an app `"act": true`, ask JARVIS to press its **Send** or **Delete** button → a **High risk** dialog first; Deny → nothing pressed
+- [ ] Ask JARVIS to type something into a search box → the dialog shows the exact text; Approve → it's in the box, Enter not pressed
+- [ ] Two buttons with the same name → JARVIS says how many match instead of guessing
+
 ### Voice
 - [ ] Delivery sounds composed (the -4% cadence); voice is the deep neural one
 
@@ -156,6 +165,7 @@ Gated actions: `write_file`, `run_shell` (if enabled), `close_app`, `close_windo
 - [x] Fixes: volume (pycaw API), goal double-response race
 - [x] Brain–Body Protocol milestones 1–2: HUD, typed input, push-to-talk, tray
 - [x] BBP milestone 3: notifications and confirmations (dialog, voice, console; fail closed)
+- [x] BBP milestone 4: clicking and typing in apps through UI Automation, approvals bound to the request
 - [x] Safe desktop control through the Body (launch, focus, list, volume, `uia.read`)
 
 ### Next up

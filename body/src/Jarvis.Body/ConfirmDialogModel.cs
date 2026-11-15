@@ -23,6 +23,10 @@ public sealed class ConfirmDialogModel(ConfirmationDialog dialog, Func<DateTimeO
     /// <summary>Exactly what would run. May come from the LLM: always shown as plain text.</summary>
     public string Detail => Dialog.Detail;
     public bool HasDetail => Detail.Length > 0;
+
+    /// <summary>set_element_text: the exact text that would be typed, in full.</summary>
+    public string Text => Dialog.Text ?? "";
+    public bool HasText => Dialog.HasText;
     public bool HighRisk => Dialog.HighRisk;
     public string RiskLabel => HighRisk ? "High risk · click Approve to allow" : "Low risk";
 

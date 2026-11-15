@@ -7,8 +7,12 @@ public sealed record ConfirmationDialog(
     string Detail,
     string Risk,
     double TimeoutS,
-    DateTimeOffset Deadline)
+    DateTimeOffset Deadline,
+    string? Text = null)
 {
+    /// <summary>set_element_text: the exact text that would be typed (amendment 20).</summary>
+    public bool HasText => Text is not null;
+
     /// <summary>run_shell and close_app: Approve takes a mouse click, never a key.</summary>
     public bool HighRisk => Risk == "high";
 
@@ -105,7 +109,7 @@ public sealed class ConfirmationTracker(Func<DateTimeOffset>? clock = null)
         if (_open.ContainsKey(p.ConfirmId))
             return;                                 // already showing (snapshot after the event)
         var dialog = new ConfirmationDialog(p.ConfirmId, p.Prompt, p.Detail ?? "", p.Risk, p.TimeoutS,
-                                            _clock() + TimeSpan.FromSeconds(p.TimeoutS));
+                                            _clock() + TimeSpan.FromSeconds(p.TimeoutS), p.Action?.Text);
         _open[p.ConfirmId] = dialog;
         Opened?.Invoke(dialog);
     }

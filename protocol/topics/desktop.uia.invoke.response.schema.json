@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/desktop.uia.invoke.response.schema.json",
+  "title": "desktop.uia.invoke (response) payload",
+  "type": "object",
+  "required": [
+    "ok",
+    "result"
+  ],
+  "properties": {
+    "ok": {
+      "const": true
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "app",
+        "control_type",
+        "pattern"
+      ],
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "control_type": {
+          "type": "string"
+        },
+        "automation_id": {
+          "type": "string"
+        },
+        "pattern": {
+          "enum": [
+            "invoke",
+            "toggle",
+            "select"
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

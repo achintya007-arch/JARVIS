@@ -47,6 +47,8 @@ def _clean(text: str) -> str:
 
 def _format_fast_result(tool: str, result: dict) -> str:
     status = result.get("status")
+    if status == "denied" and result.get("code") == "E_DENIED":
+        return f"I didn't do it, Sir: {result.get('reason', 'it needed your approval')}."
     if status == "denied":
         return f"That action is restricted, Sir. {result.get('reason', '')}".strip()
     if status == "error":

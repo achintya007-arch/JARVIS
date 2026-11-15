@@ -1,9 +1,9 @@
 {
-  "_comment": "Apps the Body may launch, focus or read (BBP desktop.*). Enforced by the Body regardless of what the Brain asks; anything else gets E_NOT_ALLOWED. Ids match the Brain's allowlist (jarvis_v1/action/app_launcher.py). processes = window owners; titles = optional title filter for hosted apps.",
+  "_comment": "Apps the Body may launch, focus or read (BBP desktop.*). Enforced by the Body regardless of what the Brain asks; anything else gets E_NOT_ALLOWED. Ids match the Brain's allowlist (jarvis_v1/action/app_launcher.py). processes = window owners; titles = optional title filter for hosted apps. act = JARVIS may also press buttons and type into fields of the app (desktop.uia.invoke / set_text); off unless true.",
   "apps": [
-    { "id": "notepad", "display": "Notepad", "exe": "notepad.exe", "processes": ["notepad.exe"] },
+    { "id": "notepad", "display": "Notepad", "exe": "notepad.exe", "processes": ["notepad.exe"], "act": true },
     { "id": "calculator", "display": "Calculator", "exe": "calc.exe", "aliases": ["calc"],
-      "processes": ["applicationframehost.exe", "calculatorapp.exe"], "titles": ["Calculator"] },
+      "processes": ["applicationframehost.exe", "calculatorapp.exe"], "titles": ["Calculator"], "act": true },
     { "id": "paint", "display": "Paint", "exe": "mspaint.exe", "aliases": ["mspaint"], "processes": ["mspaint.exe"] },
     { "id": "task manager", "display": "Task Manager", "exe": "taskmgr.exe", "aliases": ["taskmgr"], "processes": ["taskmgr.exe"] },
     { "id": "explorer", "display": "File Explorer", "exe": "explorer.exe", "aliases": ["file explorer", "files"], "processes": ["explorer.exe"] },

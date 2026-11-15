@@ -324,6 +324,58 @@ SCREEN_TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "click_element",
+            "description": (
+                "Press a button, menu item, link, tab, checkbox or list item in an app, by "
+                "the name read_screen_ui showed (UI Automation, no mouse). Prefer this to "
+                "click(x, y). Destructive or outbound buttons (Send, Delete, Pay, ...) ask "
+                "Sir first."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "app": {"type": "string",
+                            "description": "Optional allowed app name (e.g. calculator). Omit for the app in front."},
+                    "name": {"type": "string",
+                             "description": "The element's name exactly as read_screen_ui showed it (e.g. 'Seven')."},
+                    "control_type": {"type": "string",
+                                     "description": "Optional control type from read_screen_ui (e.g. Button), to narrow it."},
+                    "automation_id": {"type": "string",
+                                      "description": "Optional automation id from read_screen_ui, when there's no name."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_element_text",
+            "description": (
+                "Replace the text of an edit field in an app (UI Automation, no keystrokes; "
+                "it never presses Enter). Always asks Sir first, showing the exact text. "
+                "Prefer this to type_text."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "app": {"type": "string",
+                            "description": "Optional allowed app name (e.g. calculator). Omit for the app in front."},
+                    "name": {"type": "string",
+                             "description": "The element's name exactly as read_screen_ui showed it (e.g. 'Seven')."},
+                    "control_type": {"type": "string",
+                                     "description": "Optional control type from read_screen_ui (e.g. Button), to narrow it."},
+                    "automation_id": {"type": "string",
+                                      "description": "Optional automation id from read_screen_ui, when there's no name."},
+                    "text": {"type": "string", "description": "The exact text to put in the field (max 2000 characters)."},
+                },
+                "required": ["text"],
+            },
+        },
+    },
     # ── Screen capture ─────────────────────────────────────────────────────
     {
         "type": "function",

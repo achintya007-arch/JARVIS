@@ -101,6 +101,7 @@ class ConfirmRequested:
     timeout_s:  float
     detail:     str = ""
     priority:   int = PRIORITY_NORMAL
+    action:     dict | None = None   # amendment 20: the exact desktop request approved
 
 
 @dataclass

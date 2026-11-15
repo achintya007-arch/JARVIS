@@ -18,17 +18,15 @@ depends on it: voice and text mode work the same with or without a Body attached
   talking. Pressed while JARVIS is speaking, it interrupts him and listens.
 - **Tray icon:** shows the state at a glance. Right-click it to mute or unmute
   the microphone, show or hide the HUD, reconnect, or quit.
-- **Desktop control (read-only and low-risk actions):** when JARVIS opens an
-  app, switches to a window, lists windows, sets the volume or reads what's on
-  screen, it asks the Body, which does it with native Windows APIs. See
+- **Desktop control:** when JARVIS opens an app, switches to a window, lists
+  windows, sets the volume, reads what's on screen, presses a button or fills a
+  field, it asks the Body, which does it with native Windows APIs. See
   [Desktop control](#desktop-control).
 
 - **Confirmations and notifications:** an approve/deny dialog when JARVIS wants
   to do something that needs your OK, and a card plus a Windows notification for
   reminders, timers and alerts. See
   [Confirmations and notifications](#confirmations-and-notifications).
-
-Clicking or typing into other apps (`uia.invoke`, `uia.set_text`) comes next.
 
 ## Layout
 
@@ -43,6 +41,7 @@ body/
 │   ├── ReconnectPolicy.cs #   0.5 s, 1 s, 2 s, then every 5 s
 │   ├── BodyState.cs       #   what the HUD shows, built from events
 │   ├── ConfirmationTracker.cs # which confirmation dialogs are open, and why they close
+│   ├── ApprovalLedger.cs  #   what you approved, so clicks/typing need that exact approval
 │   ├── TokenLocator.cs    #   finds jarvis_v1/data/bbp_token
 │   └── Transport.cs       #   ClientWebSocket behind a small interface
 ├── src/Jarvis.Desktop/    # desktop actions (Windows APIs, no UI)
@@ -52,7 +51,9 @@ body/
 │   ├── Launcher.cs        #   allowlisted apps: absolute path, no shell
 │   ├── Volume.cs          #   Core Audio master volume
 │   ├── UiTree.cs          #   trimmed, capped UI tree; password fields removed
-│   └── UiaReader.cs       #   UI Automation (FlaUI), read-only
+│   ├── UiaReader.cs       #   UI Automation (FlaUI), read-only
+│   ├── UiaActor.cs        #   UI Automation patterns: press, toggle, select, set text
+│   └── RiskyNames.cs      #   "send", "delete", … (protocol/policy/risky-words.json)
 ├── src/Jarvis.Body/       # WPF HUD (UI only)
 │   ├── desktop.allowlist.json # apps the Body may launch, focus or read
 │   ├── MainWindow.xaml    #   the HUD (with the notification card)
@@ -64,7 +65,8 @@ body/
 └── tests/
     ├── Bbp.Client.Tests   # envelope, schemas, backoff, close codes, commands, requests, HUD state, confirmations
     ├── Jarvis.Body.Tests  # hotkey parsing and conflicts, tray status, dialog rules
-    └── Jarvis.Desktop.Tests # allowlist, UI-tree trimming, desktop request handlers
+    └── Jarvis.Desktop.Tests # allowlist, UI-tree trimming, desktop request handlers,
+                             # clicking/typing rules, real UIA on a test window of its own
 ```
 
 The JSON Schemas in the repo-root [`protocol/`](../protocol/) folder are copied
@@ -182,6 +184,8 @@ A missing or broken allowlist file means nothing is allowed.
 | `desktop.window.list` | Lists real windows (what Alt+Tab shows), each marked `allowed` or not |
 | `desktop.audio.set_volume` | Sets the default speaker volume to a level or by a delta |
 | `desktop.uia.read` | Reads an allowlisted window's UI as text (read-only) |
+| `desktop.uia.invoke` | Presses one button, menu item, link, tab, list item or checkbox in an app marked `act` |
+| `desktop.uia.set_text` | Replaces the text of one edit field in an app marked `act` (never presses Enter) |
 
 - **Focus:** Windows normally blocks a background program from bringing a
   window to the front (the "foreground lock"). The Body gets around it by
@@ -195,14 +199,31 @@ A missing or broken allowlist file means nothing is allowed.
   everything under them. The tree is capped at 12 levels, 300 nodes,
   200-character names and about 2.5 seconds. JARVIS treats whatever it reads as
   untrusted data, never as instructions.
+- **Clicking and typing:** only in apps whose allowlist entry has
+  `"act": true`. As shipped, that's Notepad and Calculator; add it to others
+  yourself. The Body looks only in that app's own windows, and exactly one
+  element must match the name (or automation id). Two "OK" buttons means
+  JARVIS says so and asks which, rather than guessing. Password fields,
+  disabled or read-only elements, and control types other than buttons, menu
+  items, links, tabs, list and tree items, checkboxes and radio buttons (and
+  edit fields, for typing) are refused. It works through UI Automation patterns,
+  so the mouse never moves and no keys are sent. An element with no suitable
+  pattern is refused.
+- **Approval:** typing always asks you, and the dialog shows the whole text.
+  Pressing asks when the element's name or automation id looks destructive or
+  outbound: Send, Delete, Pay, Post, Sign out, and the rest of
+  `risky-words.json`, written in any case, with look-alike letters or hidden
+  characters. The Body checks this on the element it actually finds, and runs
+  the request only with the approval it saw you give for exactly that request,
+  once, within 30 s. A Brain that skips the dialog gets `E_DENIED`.
 - **Allowlist entries:** `id` (same ids as the Brain's allowlist), `exe`,
   optional `args` and `candidates` (install paths), `processes` (which
   processes' windows belong to the app), optional `titles` (for apps hosted by
-  another process, such as Calculator) and `aliases`.
+  another process, such as Calculator), `aliases`, and `act` (may click and type).
 
 If the Body isn't connected, JARVIS falls back to its Python tools, unless
-`bbp.desktop_fallback: false` is set. Reading the screen has no Python
-fallback.
+`bbp.desktop_fallback: false` is set. Reading the screen, clicking and typing
+have no Python fallback.
 
 **Limits:**
 
@@ -213,4 +234,5 @@ fallback.
   allowlist applies.
 
 The response shape and the capability names are amendments 14 and 15 in the
-[spec](../docs/protocol/BBP_v0.1.md#amendments-oct-15-2026), still proposed.
+[spec](../docs/protocol/BBP_v0.1.md#amendments-oct-15-2026); clicking, typing
+and their approvals are amendments 19–21.
