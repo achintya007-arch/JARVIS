@@ -8,7 +8,9 @@ into Brain actions (milestone 2+). It owns no cognition.
   Body → hello{token}      Brain → welcome{snapshot}     (bad token: close 4401)
   Body → ping (every 5 s)  Brain → pong                   (silent > timeout: close 4408)
   Brain → voice.state / voice.transcript / reply.chunk / reply.done  (events)
-  Body → input.text / voice.control / ui.hotkey (commands; see bbp_commands.py)
+  Brain → confirm.request / confirm.resolved / notify                 (events)
+  Body → input.text / voice.control / ui.hotkey / confirm.response / notify.action
+         (commands; see bbp_commands.py)
   Brain → desktop.* request → Body → response (corr = request id; 5 s → E_TIMEOUT)
 
 Fail-safe by construction: the server is optional (bbp.enabled), a failed
@@ -38,7 +40,19 @@ from websockets.asyncio.server import Server, ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 
 from core_v3.adapters import bbp_protocol as bbp
-from core_v3.events import ReplyChunk, ReplyDone, TranscriptReady, VoiceStateChanged
+from core_v3.events import (
+    PRIORITY_IMPORTANT,
+    ActionSuggestion,
+    ConfirmRequested,
+    ConfirmResolved,
+    Notice,
+    ReplyChunk,
+    ReplyDone,
+    SpeakRequest,
+    TimerFinished,
+    TranscriptReady,
+    VoiceStateChanged,
+)
 
 log = logging.getLogger("jarvis.bbp")
 
@@ -51,6 +65,9 @@ _CONNECTION_SEQ = itertools.count(1)
 _JARVIS_DIR = Path(__file__).resolve().parents[2]      # …/jarvis_v1
 
 CommandHandler = Callable[["BodyConnection", dict[str, Any]], Awaitable[None]]
+DisconnectHandler = Callable[["BodyConnection"], None]
+_NOTIFY_TITLE_MAX = 120
+_NOTIFY_BODY_MAX = 1000
 
 
 # ── Auth token ────────────────────────────────────────────────────────────────
@@ -136,6 +153,7 @@ class BBPServer:
         self._token = ""
         self._clients: set[BodyConnection] = set()
         self._commands: dict[str, CommandHandler] = {}
+        self._disconnect_handlers: list[DisconnectHandler] = []
         self._tasks: set[asyncio.Task] = set()      # in-flight command handlers
         # Brain → Body requests awaiting a response: request id → (Body, future)
         self._pending: dict[str, tuple[BodyConnection, asyncio.Future]] = {}
@@ -144,6 +162,13 @@ class BBPServer:
             (TranscriptReady, self._on_transcript),
             (ReplyChunk, self._on_reply_chunk),
             (ReplyDone, self._on_reply_done),
+            (ConfirmRequested, self._on_confirm_requested),
+            (ConfirmResolved, self._on_confirm_resolved),
+            # notify (amendment 18): the visual copy of what JARVIS also says.
+            (Notice, self._on_notice),
+            (TimerFinished, self._on_timer_finished),
+            (ActionSuggestion, self._on_suggestion),
+            (SpeakRequest, self._on_speak_request),
         ]
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -203,6 +228,10 @@ class BBPServer:
 
     def register_command(self, topic: str, handler: CommandHandler) -> None:
         self._commands[topic] = handler
+
+    def on_disconnect(self, handler: DisconnectHandler) -> None:
+        """Called (synchronously) after a Body leaves, e.g. to deny a confirmation."""
+        self._disconnect_handlers.append(handler)
 
     # ── Brain → Body requests ─────────────────────────────────────────────────
     def body_with(self, capability: str) -> BodyConnection | None:
@@ -278,6 +307,42 @@ class BBPServer:
     async def _on_reply_done(self, ev: ReplyDone) -> None:
         self.broadcast_event("reply.done", {"turn_id": ev.turn_id, "interrupted": ev.interrupted})
 
+    async def _on_confirm_requested(self, ev: ConfirmRequested) -> None:
+        payload = {"confirm_id": ev.confirm_id, "prompt": ev.prompt, "risk": ev.risk,
+                   "timeout_s": ev.timeout_s}
+        if ev.detail:
+            payload["detail"] = ev.detail
+        self.broadcast_event("confirm.request", payload)
+
+    async def _on_confirm_resolved(self, ev: ConfirmResolved) -> None:
+        self.broadcast_event("confirm.resolved",
+                             {"confirm_id": ev.confirm_id, "approved": ev.approved, "by": ev.by})
+
+    def notify(self, level: str, title: str, body: str = "") -> None:
+        """Broadcast a notify event (no buttons in v0.1)."""
+        self.broadcast_event("notify", {
+            "notify_id": uuid.uuid4().hex, "level": level,
+            "title": _cut(title, _NOTIFY_TITLE_MAX) or "JARVIS", "body": _cut(body, _NOTIFY_BODY_MAX),
+            "actions": [],
+        })
+
+    async def _on_notice(self, ev: Notice) -> None:
+        self.notify(ev.level, ev.title, ev.body)
+
+    async def _on_timer_finished(self, ev: TimerFinished) -> None:
+        label = " ".join(str(ev.label).split()) or "Timer"
+        self.notify("warn", "Timer", f"Your {label} timer is done."
+                    if label.lower() != "timer" else "Your timer is done.")
+
+    async def _on_suggestion(self, ev: ActionSuggestion) -> None:
+        self.notify("info", "Suggestion", ev.speak_text)
+
+    async def _on_speak_request(self, ev: SpeakRequest) -> None:
+        # Goal reminders are exactly PRIORITY_IMPORTANT. Resource alerts are
+        # critical and arrive as a Notice instead; normal speech is the reply.
+        if ev.priority == PRIORITY_IMPORTANT:
+            self.notify("warn", "Reminder", ev.text)
+
     # ── Connection handling ───────────────────────────────────────────────────
     def _check_path(self, connection: ServerConnection, request):
         if request.path != self._cfg.path:
@@ -319,6 +384,11 @@ class BBPServer:
             self._clients.discard(client)
             self._fail_pending(client)
             writer.cancel()
+            for handler in self._disconnect_handlers:
+                try:
+                    handler(client)
+                except Exception as e:
+                    log.error("BBP: disconnect handler failed: %s", e)
             log.info("BBP: %s disconnected (%d connected)", client.client, len(self._clients))
 
     async def _authenticate(self, ws: ServerConnection) -> dict[str, Any] | None:
@@ -404,6 +474,11 @@ class BBPServer:
             raise
         except Exception as e:
             log.error("BBP: command %s failed: %s", message["topic"], e, exc_info=True)
+
+
+def _cut(text: str, limit: int) -> str:
+    text = " ".join(str(text).split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
 def _extract_id(raw: str | bytes) -> str | None:

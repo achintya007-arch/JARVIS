@@ -12,6 +12,10 @@ these files.
 | `topics/<topic>.schema.json` | The `payload` of an event, command or request (and the `error` response) |
 | `topics/<topic>.response.schema.json` | The `payload` of a successful response to a request: `{ ok: true, result }` |
 
+`topics/confirm.response.schema.json` only looks like a response schema: it is
+the *command* topic `confirm.response` (the Body's answer to a `confirm.request`).
+There is no topic called `confirm`, so the two names never clash.
+
 How a message is validated:
 
 1. Validate the whole message against `envelope.schema.json`.

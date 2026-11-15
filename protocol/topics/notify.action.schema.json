@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/notify.action.schema.json",
+  "title": "notify.action (command, Body -> Brain) payload",
+  "description": "You pressed one of a notification's buttons. In v0.1 notifications have no buttons, so the Brain accepts this and only logs it.",
+  "type": "object",
+  "required": ["notify_id", "action"],
+  "properties": {
+    "notify_id": { "type": "string", "minLength": 1 },
+    "action": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": true
+}

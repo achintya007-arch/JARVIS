@@ -17,7 +17,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from core_v3.event_bus import EventBus
-from core_v3.events import PRIORITY_CRITICAL, ResourceAlert, SpeakRequest
+from core_v3.events import PRIORITY_CRITICAL, Notice, ResourceAlert, SpeakRequest
 
 if TYPE_CHECKING:
     from cognition.agent_state import AgentState
@@ -81,6 +81,10 @@ class ResourceAdapter:
             event.metric, event.value, self._llm.current_model,
         )
         self._bus.publish(SpeakRequest(text=alert, priority=PRIORITY_CRITICAL))
+        # The visual copy for a Body (BBP notify, amendment 18).
+        self._bus.publish(Notice(level="alert" if event.entering else "info",
+                                 title="Resource pressure" if event.entering else "Resources",
+                                 body=alert))
 
     def snapshot(self) -> dict:
         return self._monitor.snapshot()

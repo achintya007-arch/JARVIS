@@ -23,8 +23,12 @@ depends on it: voice and text mode work the same with or without a Body attached
   screen, it asks the Body, which does it with native Windows APIs. See
   [Desktop control](#desktop-control).
 
-Notifications and confirmation dialogs come next. Clicking or typing into other
-apps (`uia.invoke`, `uia.set_text`) waits until confirmations exist.
+- **Confirmations and notifications:** an approve/deny dialog when JARVIS wants
+  to do something that needs your OK, and a card plus a Windows notification for
+  reminders, timers and alerts. See
+  [Confirmations and notifications](#confirmations-and-notifications).
+
+Clicking or typing into other apps (`uia.invoke`, `uia.set_text`) comes next.
 
 ## Layout
 
@@ -38,6 +42,7 @@ body/
 │   ├── BbpClient.cs       #   hello/welcome, ping, close-code handling, commands
 │   ├── ReconnectPolicy.cs #   0.5 s, 1 s, 2 s, then every 5 s
 │   ├── BodyState.cs       #   what the HUD shows, built from events
+│   ├── ConfirmationTracker.cs # which confirmation dialogs are open, and why they close
 │   ├── TokenLocator.cs    #   finds jarvis_v1/data/bbp_token
 │   └── Transport.cs       #   ClientWebSocket behind a small interface
 ├── src/Jarvis.Desktop/    # desktop actions (Windows APIs, no UI)
@@ -50,13 +55,15 @@ body/
 │   └── UiaReader.cs       #   UI Automation (FlaUI), read-only
 ├── src/Jarvis.Body/       # WPF HUD (UI only)
 │   ├── desktop.allowlist.json # apps the Body may launch, focus or read
-│   ├── MainWindow.xaml    #   the HUD
+│   ├── MainWindow.xaml    #   the HUD (with the notification card)
+│   ├── ConfirmWindow.xaml #   approve/deny dialog; its rules are in ConfirmDialogModel.cs
+│   ├── NotificationView.cs#   how long each notify level shows, tray icon per level
 │   ├── TrayIcon.cs        #   notification-area icon and menu
 │   ├── GlobalHotkey.cs    #   RegisterHotKey + "Ctrl+Alt+J" parsing
 │   └── BodyLog.cs         #   %LOCALAPPDATA%\JARVIS\body.log
 └── tests/
-    ├── Bbp.Client.Tests   # envelope, schemas, backoff, close codes, commands, requests, HUD state
-    ├── Jarvis.Body.Tests  # hotkey parsing and conflicts, tray status
+    ├── Bbp.Client.Tests   # envelope, schemas, backoff, close codes, commands, requests, HUD state, confirmations
+    ├── Jarvis.Body.Tests  # hotkey parsing and conflicts, tray status, dialog rules
     └── Jarvis.Desktop.Tests # allowlist, UI-tree trimming, desktop request handlers
 ```
 
@@ -133,6 +140,32 @@ How the Body reacts to each close code:
 | 4401 | Bad or missing token | Stop retrying until the token file changes or you choose **Reconnect** in the tray |
 | 4408 | Idle timeout | Reconnect immediately, then normal backoff |
 | Anything else / network drop | Unexpected | Reconnect with normal backoff |
+
+## Confirmations and notifications
+
+**Confirmations.** Some actions need your OK first: writing a file, closing an
+app or window, and shell commands (off by default). When JARVIS asks, every
+connected Body shows a dialog at the top of the screen:
+
+- The question, and **exactly what would run** (the command, the file and its
+  size, the app or window) as plain text in a box. It can come from the LLM, so
+  the Brain strips control and right-to-left override characters first.
+- **High risk** (shell commands, closing an app) or **Low risk**, and a countdown
+  (15 s, `bbp.confirm_timeout_s` on the Brain).
+- **Deny** is the default button and Esc denies. The dialog never takes focus by
+  itself, so keys you were typing elsewhere can't answer it. For high-risk
+  actions Approve can't be reached with Tab: it takes a mouse click.
+
+Your voice ("yes" / "no"), or the console in text mode, can answer instead; the
+first answer wins and every dialog closes. No answer in time means **no**. So
+does quitting the Body, or losing the connection, while a dialog is open. Typing
+"yes" into the HUD box doesn't count: while a confirmation is pending, typed
+input is refused.
+
+**Notifications.** Goal reminders, finished timers and resource alerts (and goal
+suggestions) show as a card on the HUD (click it to dismiss; alerts stay 30 s)
+and as a Windows notification from the tray icon. The Body never speaks them;
+JARVIS already does.
 
 ## Desktop control
 

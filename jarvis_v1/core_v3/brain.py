@@ -30,10 +30,12 @@ from core_v3.adapters.bbp_commands import BBPCommands
 from core_v3.adapters.bbp_server import BBPServer
 from core_v3.adapters.phonebox import PhoneBoxAdapter
 from core_v3.adapters.remote_desktop import RemoteDesktop
+from core_v3.confirmations import ConfirmationBroker
+from core_v3.console import ConsoleInput
 from core_v3.conversation import TURN_FAILED_REPLY, ConversationEngine
 from core_v3.event_bus import EventBus
-from core_v3.events import SpeakRequest, SystemEvent
-from core_v3.voice.orchestrator import VoiceOrchestrator
+from core_v3.events import SpeakRequest, SystemEvent, TimerFinished
+from core_v3.voice.orchestrator import _AFFIRMATIVE_RE, NO_CONFIRMATION_HEARD, VoiceOrchestrator
 from core_v3.voice.state import VoiceState
 from infra.resource_monitor import ResourceMonitor
 from memory.vault_memory import VaultMemory
@@ -55,6 +57,9 @@ class Brain:
         self._stop_event = asyncio.Event()
         self._turn_lock = asyncio.Lock()     # text mode: one turn at a time (stdin or Body)
         self._orchestrator: VoiceOrchestrator | None = None
+        self._console = ConsoleInput()       # text mode: chat loop + confirmations share stdin
+        # Every pending confirmation: voice, console and Body dialogs race to answer.
+        self._confirmations = ConfirmationBroker(self._bus, timeout_s=config.bbp.confirm_timeout_s)
 
         # ── Infrastructure / cognition (unchanged) ─────────────────────────
         self._resource_monitor = ResourceMonitor(config.resources)
@@ -78,6 +83,8 @@ class Brain:
             speak_callback=self._speak_cb,
             confirm_callback=self._confirm_cb,
             vault_tools=self._obsidian,
+            confirm_request_callback=self._confirm_request,
+            timer_done_callback=lambda label: self._bus.publish(TimerFinished(label=label)),
         )
         self._agent_core = AgentCore(
             llm=self._llm, executor=self._executor,
@@ -126,6 +133,7 @@ class Brain:
                 orchestrator=self._orchestrator, conversation=self._conversation,
                 config=config.bbp, turn_lock=self._turn_lock,
                 voice_active=lambda: getattr(self.config, "mode", "wake") != "text",
+                confirmations=self._confirmations,
             ).register(self._bbp)
             # Desktop tools go to a connected Body when it can do them; otherwise
             # the Python tools run (unless bbp.desktop_fallback is false).
@@ -152,6 +160,45 @@ class Brain:
         if self._orchestrator is None:
             return False
         return await self._orchestrator.confirm(prompt)
+
+    # ── Confirmations (BBP milestone 3) ───────────────────────────────────────
+    def _text_mode(self) -> bool:
+        return getattr(self.config, "mode", "wake") == "text"
+
+    async def _confirm_request(self, request) -> bool:
+        """A gated tool asks. The broker races the Body dialogs against your
+        voice (voice mode, unless the mic is muted) or the console (text mode)."""
+        text_mode = self._text_mode()
+        channels = {}
+        if text_mode:
+            channels["text"] = self._console_answer
+        elif self._orchestrator is not None and not self._orchestrator.muted:
+            channels["voice"] = self._orchestrator_answer
+        result = await self._confirmations.ask(request, channels)
+        if result.by == "timeout":
+            if text_mode:
+                print("\nJARVIS: No answer in time, so I won't do it.", flush=True)
+            elif self._orchestrator is not None:
+                await self._orchestrator.speak(NO_CONFIRMATION_HEARD)
+        elif result.by == "body" and text_mode:
+            verdict = "approved" if result.approved else "denied"
+            print(f"\n(answered on the HUD: {verdict})", flush=True)
+        elif result.by == "error" and text_mode:
+            print("\nJARVIS: I couldn't get a clear answer (the HUD may have closed), so I won't do it.",
+                  flush=True)
+        return result.approved
+
+    async def _orchestrator_answer(self, request, timeout: float) -> bool | None:
+        return await self._orchestrator.listen_for_confirmation(request.prompt, timeout)
+
+    async def _console_answer(self, request, timeout: float) -> bool | None:
+        print(f"JARVIS: {request.prompt}", flush=True)
+        if request.detail:
+            print(f"        > {request.detail}", flush=True)
+        while True:
+            line = (await self._console.readline(f"Approve? yes/no ({timeout:.0f} s): ")).strip()
+            if line:
+                return bool(_AFFIRMATIVE_RE.match(line))
 
     async def _on_speak_request(self, event: SpeakRequest) -> None:
         # Resource alerts etc. — speak only when idle so we never talk over a turn.
@@ -183,7 +230,7 @@ class Brain:
             "voice": voice,
             "agent": agent,
             "active_goals": self._active_goals(),
-            "pending_confirmations": [],     # milestone 3: confirmation broker
+            "pending_confirmations": self._confirmations.pending(),
         }
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -216,7 +263,7 @@ class Brain:
         asked_question = False
         while not self._stopped:
             try:
-                text = await asyncio.to_thread(input, "You: ")
+                text = await self._console.readline("You: ")
             except (EOFError, KeyboardInterrupt):
                 break
             if not text.strip():

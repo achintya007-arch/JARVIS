@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/confirm.response.schema.json",
+  "title": "confirm.response (command, Body -> Brain) payload",
+  "description": "Your answer to a confirm.request. This is the command topic confirm.response, not the response schema of a topic called confirm (there is none). An unknown or already settled confirm_id is refused with E_NOT_FOUND (amendment 16).",
+  "type": "object",
+  "required": ["confirm_id", "approved"],
+  "properties": {
+    "confirm_id": { "type": "string", "minLength": 1 },
+    "approved": { "type": "boolean" }
+  },
+  "additionalProperties": true
+}

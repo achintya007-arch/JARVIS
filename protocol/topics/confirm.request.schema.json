@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/confirm.request.schema.json",
+  "title": "confirm.request (event, Brain -> Body) payload",
+  "description": "A gated action waits for your approval. No answer before timeout_s means deny. detail (amendment 17) is what exactly would run: the command, the file, the app or the window. It can come from the LLM: show it as plain text, never as markup.",
+  "type": "object",
+  "required": ["confirm_id", "prompt", "risk", "timeout_s"],
+  "properties": {
+    "confirm_id": { "type": "string", "minLength": 1 },
+    "prompt": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "risk": { "enum": ["low", "high"] },
+    "timeout_s": { "type": "number", "exclusiveMinimum": 0, "maximum": 300 },
+    "detail": { "type": "string", "maxLength": 400 }
+  },
+  "additionalProperties": true
+}

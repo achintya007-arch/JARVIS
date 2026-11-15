@@ -8,7 +8,7 @@ Run every command below from `jarvis_v1/`.
 .\run.ps1              # V3 (vault brain), voice
 .\run.ps1 -Text        # V3, keyboard input (no mic needed) — easiest for a first check
 .\run.ps1 -V2          # V2 (stable brain)
-.\run.ps1 -Test        # run the automated test suite (459 tests)
+.\run.ps1 -Test        # run the automated test suite (560 tests)
 .\run.ps1 -VoiceTest   # A/B test TTS voice/rate/pitch without the full pipeline
 ```
 
@@ -120,6 +120,18 @@ Watch the JARVIS console for `desktop <topic> via body` (or `via python`).
 - [ ] `bbp.desktop_fallback: false`, Body closed → refused because the Body isn't connected
 - [ ] Remove Notepad from `desktop.allowlist.json` next to `Jarvis.Body.exe`, restart the Body; "open notepad" → refused by the Body
 
+### Confirmations and notifications (needs the Body; `bbp.enabled: true`)
+Gated actions: `write_file`, `run_shell` (if enabled), `close_app`, `close_window`.
+- [ ] Ask JARVIS to write a short note to a file in `data/workspace/` → a dialog shows the file and its size, **Deny** highlighted, a 15 s countdown
+- [ ] Click **Approve** → it runs; try again and click **Deny** → it doesn't
+- [ ] Answer by voice ("yes" / "no") instead → the dialog closes by itself
+- [ ] Text mode (`.\run.ps1 -Text`): the console shows `Approve? yes/no`; typing works, and so does the dialog
+- [ ] Don't answer → after 15 s JARVIS says it won't do it; the dialog closes
+- [ ] While the dialog is open, type "yes" in the HUD box → refused ("waiting for you to approve or deny")
+- [ ] Quit the Body while a dialog is open → the action is denied at once
+- [ ] "close calculator" → the dialog says **High risk**; Tab can't reach Approve, only a click can
+- [ ] "set a timer for 10 seconds" → when it goes off: a card on the HUD and a Windows notification
+
 ### Voice
 - [ ] Delivery sounds composed (the -4% cadence); voice is the deep neural one
 
@@ -143,6 +155,7 @@ Watch the JARVIS console for `desktop <topic> via body` (or `via python`).
 - [x] Phase F — voice tuning, barge-in, ambient presence, live context
 - [x] Fixes: volume (pycaw API), goal double-response race
 - [x] Brain–Body Protocol milestones 1–2: HUD, typed input, push-to-talk, tray
+- [x] BBP milestone 3: notifications and confirmations (dialog, voice, console; fail closed)
 - [x] Safe desktop control through the Body (launch, focus, list, volume, `uia.read`)
 
 ### Next up

@@ -284,6 +284,14 @@ bbp:
   request_timeout_s: 5     # how long the Brain waits for the Body to answer
 ```
 
+The HUD also shows **confirmations**: when JARVIS wants to write a file or close
+an app, a dialog shows exactly what it would do, with Deny as the default and a
+countdown (`bbp.confirm_timeout_s`, 15 s; no answer means no). Voice or the
+console can answer too, and the first answer wins. **Notifications** (goal
+reminders, finished timers, resource alerts) appear as a card on the HUD and as
+a Windows notification. See
+[`body/README.md`](body/README.md#confirmations-and-notifications).
+
 ### Optional: phone desk panel (PhoneBox)
 
 [PhoneBox](https://github.com/ersinkoc/phonebox) is a separate program that
@@ -357,8 +365,12 @@ accordingly:
   removed before any screen content leaves it.
 - **Screen and web text is untrusted.** What `read_screen_ui` returns is labelled
   as data; JARVIS never follows instructions found in it.
-- **Gated actions require confirmation** via a voice/text-answerable prompt and
-  **fail closed** if no confirmation channel is available.
+- **Gated actions require confirmation** and **fail closed**. Writing a file,
+  closing an app or window, and shell commands (off by default) ask first. You
+  can answer by voice, in the console in text mode, or in the HUD's dialog,
+  which shows exactly what would run. No answer in 15 s, an error, or the HUD
+  closing mid-question means no. Typing "yes" into the HUD box or a phone
+  button never counts as an answer.
 
 See [`action/agent_executor.py`](jarvis_v1/action/agent_executor.py),
 [`tests/test_security.py`](jarvis_v1/tests/test_security.py) and

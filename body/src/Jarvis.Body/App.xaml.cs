@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using Bbp.Client;
 using Jarvis.Desktop;
 
@@ -15,6 +17,12 @@ public partial class App : Application
     private TrayIcon? _tray;
     private GlobalHotkey? _hotkey;
     private FlaUiReader? _uiReader;
+
+    // Confirmations (milestone 3): one dialog per pending confirm.request.
+    private readonly ConfirmationTracker _confirmations = new();
+    private readonly Dictionary<string, ConfirmWindow> _dialogs = new();
+    private readonly ConcurrentDictionary<string, string> _answerCommands = new();   // command id → confirm_id
+    private DispatcherTimer? _dialogTimer;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -42,7 +50,7 @@ public partial class App : Application
             Url = new Uri(settings.Url),
             TokenProvider = settings.ReadToken,
             ClientName = "win-shell",
-            ClientVersion = "0.3.0",
+            ClientVersion = "0.4.0",
             Capabilities = ["hud", "hotkey", .. DesktopService.Capabilities],
         }, validator);
 
@@ -59,11 +67,34 @@ public partial class App : Application
         client.StateChanged += (state, detail) =>
         {
             BodyLog.Write($"connection: {state} {detail}");
-            Dispatcher.BeginInvoke(() => vm.OnConnection(state, detail));
+            Dispatcher.BeginInvoke(() =>
+            {
+                vm.OnConnection(state, detail);
+                if (state != ConnectionState.Connected)
+                    _confirmations.Disconnected();      // can't answer from here any more
+            });
         };
-        client.Welcomed += w => Dispatcher.BeginInvoke(() => vm.OnWelcome(w));
-        client.EventReceived += m => Dispatcher.BeginInvoke(() => vm.OnEvent(m));
+        client.Welcomed += w => Dispatcher.BeginInvoke(() =>
+        {
+            vm.OnWelcome(w);
+            _confirmations.ApplyWelcome(w);             // reopen what is still pending
+        });
+        client.EventReceived += m => Dispatcher.BeginInvoke(() =>
+        {
+            if (!_confirmations.Apply(m))
+                vm.OnEvent(m);
+        });
         client.ResponseReceived += OnResponse;
+        _confirmations.Opened += OpenDialog;
+        _confirmations.Closed += CloseDialog;
+        _dialogTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _dialogTimer.Tick += (_, _) =>
+        {
+            _confirmations.ExpireOverdue();
+            foreach (var dialog in _dialogs.Values)
+                dialog.Model.Tick();
+        };
+        _dialogTimer.Start();
         client.ProtocolError += err => BodyLog.Write("protocol: " + err);
 
         var window = _window = new MainWindow { DataContext = vm };
@@ -74,6 +105,11 @@ public partial class App : Application
         };
 
         var tray = _tray = new TrayIcon();
+        vm.NotificationArrived += note =>
+        {
+            BodyLog.Write($"notify {note.Level}: {note.Title}");
+            tray.ShowNotification(note.Title, note.Body, note.Level);
+        };
         tray.MuteToggled += mute => Send(Topics.VoiceControl, new VoiceControlPayload(mute ? "mute" : "unmute"));
         tray.ShowHideRequested += ToggleHud;
         tray.ReconnectRequested += client.Reconnect;
@@ -139,8 +175,58 @@ public partial class App : Application
             return;
         var error = response.PayloadAs<ErrorPayload>().Error;
         BodyLog.Write($"command refused: {error.Code} {error.Message}");
-        Dispatcher.BeginInvoke(() => _vm!.ShowNotice(Capitalize(error.Message) + "."));
+        var answeredConfirm = response.Corr is { } corr && _answerCommands.TryRemove(corr, out var cid) ? cid : null;
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (answeredConfirm is not null)
+                _confirmations.Dismiss(answeredConfirm);    // already answered elsewhere or timed out
+            _vm!.ShowNotice(Capitalize(error.Message) + ".");
+        });
     }
+
+    // ── Confirmation dialogs ────────────────────────────────────────────────
+
+    private void OpenDialog(ConfirmationDialog dialog)
+    {
+        BodyLog.Write($"confirmation {Short(dialog.ConfirmId)} shown ({dialog.Risk} risk, {dialog.TimeoutS:0.#} s)");
+        var window = new ConfirmWindow(new ConfirmDialogModel(dialog, () => _confirmations.Now));
+        window.Answered += payload => SendAnswer(window, payload);
+        _dialogs[dialog.ConfirmId] = window;
+        window.Show();
+    }
+
+    private void CloseDialog(string confirmId, DialogClose why, ConfirmResolvedPayload? resolved)
+    {
+        BodyLog.Write(resolved is null
+            ? $"confirmation {Short(confirmId)} closed: {why}"
+            : $"confirmation {Short(confirmId)} {(resolved.Approved ? "approved" : "denied")} by {resolved.By}");
+        if (_dialogs.Remove(confirmId, out var window))
+            window.Close();
+        if (why == DialogClose.Disconnected)
+            _vm!.ShowNotice("Lost the link to JARVIS while it was asking you to approve something. It won't go ahead.", 12);
+    }
+
+    private void SendAnswer(ConfirmWindow window, ConfirmResponsePayload payload)
+    {
+        var client = _client!;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var id = await client.SendCommandAsync(Topics.ConfirmResponse, payload);
+                _answerCommands[id] = payload.ConfirmId;
+                BodyLog.Write($"confirmation {Short(payload.ConfirmId)}: sent {(payload.Approved ? "approve" : "deny")}");
+            }
+            catch (Exception e)
+            {
+                BodyLog.Write($"confirmation {Short(payload.ConfirmId)}: send failed: {e.Message}");
+                var message = e is InvalidOperationException ? "Not connected to JARVIS." : $"Couldn't send: {e.Message}";
+                await Dispatcher.BeginInvoke(() => window.Model.AnswerFailed(message));
+            }
+        });
+    }
+
+    private static string Short(string id) => id.Length > 8 ? id[..8] : id;
 
     private void ToggleHud()
     {
@@ -158,6 +244,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _cts.Cancel();
+        _dialogTimer?.Stop();
         _hotkey?.Dispose();
         _tray?.Dispose();
         _uiReader?.Dispose();

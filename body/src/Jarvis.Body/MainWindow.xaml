@@ -41,6 +41,25 @@
                            Style="{StaticResource HideWhenEmpty}" />
             </ScrollViewer>
 
+            <!-- Notification card (notify): reminder, timer, resource alert. Click to dismiss. -->
+            <Border CornerRadius="8" Background="#1C232A" BorderThickness="3,0,0,0" BorderBrush="{Binding NotificationBrush}"
+                    Padding="10,6" Margin="0,8,0,0" Cursor="Hand" MouseLeftButtonDown="OnNotificationClick">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasNotification}" Value="False">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel>
+                    <TextBlock Text="{Binding NotificationTitle}" FontSize="12" FontWeight="SemiBold" Foreground="{Binding NotificationBrush}" />
+                    <TextBlock Text="{Binding NotificationBody}" FontSize="12.5" TextWrapping="Wrap" Margin="0,2,0,0"
+                               Style="{StaticResource HideWhenEmpty}" />
+                </StackPanel>
+            </Border>
+
             <!-- Transient notice: refused command, hotkey unavailable… (click to dismiss) -->
             <TextBlock Text="{Binding Notice}" FontSize="12" Foreground="#F5B731" TextWrapping="Wrap"
                        Margin="0,8,0,0" Cursor="Hand" MouseLeftButtonDown="OnNoticeClick"

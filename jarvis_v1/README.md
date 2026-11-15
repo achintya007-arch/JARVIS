@@ -67,8 +67,10 @@ hardened accordingly:
   resolves to an absolute path and starts without a shell; anything else is
   refused. `open_url` accepts http/https only.
 - **Screen and web text is untrusted:** JARVIS never follows instructions in it.
-- **Gated actions require confirmation** via a voice/text-answerable prompt and
-  **fail closed** if no confirmation channel is available.
+- **Gated actions require confirmation** and **fail closed**: answer by voice,
+  in the console (text mode) or in the HUD's dialog
+  ([`core_v3/confirmations.py`](core_v3/confirmations.py)); no answer in 15 s,
+  an error, or the HUD closing mid-question means no.
 
 See `action/agent_executor.py`, `tests/test_security.py` and
 `tests/test_injection.py`.

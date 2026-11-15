@@ -20,6 +20,9 @@ public sealed class BodyState
     public bool ReplyInterrupted { get; private set; }
     public string Model { get; private set; } = "";
 
+    /// <summary>The latest notify (reminder, timer, alert…): shown on screen, never spoken.</summary>
+    public NotifyPayload? LastNotification { get; private set; }
+
     /// <summary>The streaming reply so far, in seq order.</summary>
     public string Reply => string.Join(" ", _chunks.Values);
 
@@ -62,6 +65,10 @@ public sealed class BodyState
                     ClearReply(done.TurnId);
                 ReplyDone = true;
                 ReplyInterrupted = done.Interrupted;
+                return true;
+
+            case Topics.Notify:
+                LastNotification = message.PayloadAs<NotifyPayload>();
                 return true;
 
             default:

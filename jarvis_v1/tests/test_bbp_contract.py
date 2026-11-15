@@ -159,3 +159,49 @@ class TestBodyCommands:
 
     def test_bad_hotkey_name(self):
         assert _code(bbp.envelope("command", "ui.hotkey", {"name": "Push To Talk"})) == "E_BAD_PAYLOAD"
+
+
+# ── Milestone 3: notifications and confirmations ──────────────────────────────
+
+PENDING = {"confirm_id": "c1", "prompt": "About to run the command git status. Shall I proceed, Sir?",
+           "risk": "high", "timeout_s": 11.5, "detail": "git status"}
+
+MILESTONE_3 = [
+    bbp.envelope("event", "notify", {"notify_id": "n1", "level": "warn", "title": "Reminder",
+                                     "body": "Sir, a reminder.", "actions": []}),
+    bbp.envelope("event", "confirm.request", {**PENDING, "timeout_s": 15}),
+    bbp.envelope("event", "confirm.request", {"confirm_id": "c2", "prompt": "Close?", "risk": "low",
+                                              "timeout_s": 15}),           # detail is optional
+    bbp.envelope("event", "confirm.resolved", {"confirm_id": "c1", "approved": False, "by": "timeout"}),
+    bbp.envelope("command", "confirm.response", {"confirm_id": "c1", "approved": True}),
+    bbp.envelope("command", "notify.action", {"notify_id": "n1", "action": "snooze"}),
+    bbp.envelope("welcome", "welcome", {"session": "s", "brain_version": "3.0",
+                                        "snapshot": {**SNAPSHOT, "pending_confirmations": [PENDING]}}),
+    bbp.error_response("cmd-5", "E_NOT_FOUND", "that confirmation isn't pending any more"),
+]
+
+
+class TestMilestone3:
+    def test_every_topic_has_a_schema(self):
+        for topic in ("notify", "confirm.request", "confirm.resolved"):
+            assert bbp.has_schema("event", topic), topic
+        for topic in ("confirm.response", "notify.action"):
+            assert bbp.has_schema("command", topic), topic
+
+    @pytest.mark.parametrize("message", MILESTONE_3, ids=lambda m: f"{m['kind']}:{m['topic']}")
+    def test_validates(self, message):
+        bbp.validate(message)
+
+    @pytest.mark.parametrize("topic,payload", [
+        ("notify", {"notify_id": "n", "level": "panic", "title": "x", "body": "", "actions": []}),
+        ("notify", {"notify_id": "n", "level": "info", "title": "", "body": "", "actions": []}),
+        ("confirm.request", {**PENDING, "risk": "medium"}),
+        ("confirm.request", {**PENDING, "timeout_s": 0}),
+        ("confirm.request", {**PENDING, "detail": "x" * 401}),
+        ("confirm.resolved", {"confirm_id": "c", "approved": True, "by": "phone"}),
+        ("confirm.response", {"confirm_id": "c", "approved": "yes"}),
+        ("confirm.response", {"approved": True}),
+    ])
+    def test_bad_payloads(self, topic, payload):
+        kind = "command" if topic == "confirm.response" else "event"
+        assert _code(bbp.envelope(kind, topic, payload)) == "E_BAD_PAYLOAD"

@@ -88,3 +88,42 @@ class ReplyDone:
     turn_id:     str
     interrupted: bool = False
     priority:    int = PRIORITY_NORMAL
+
+
+# ── V3-only: confirmations and notices (BBP milestone 3) ──────────────────────
+
+@dataclass
+class ConfirmRequested:
+    """A gated action waits for approval (ConfirmationBroker). -> BBP confirm.request"""
+    confirm_id: str
+    prompt:     str
+    risk:       str              # "low" | "high"
+    timeout_s:  float
+    detail:     str = ""
+    priority:   int = PRIORITY_NORMAL
+
+
+@dataclass
+class ConfirmResolved:
+    """A confirmation was settled by whoever answered first. -> BBP confirm.resolved"""
+    confirm_id: str
+    approved:   bool
+    by:         str              # "body" | "voice" | "text" | "timeout" | "error"
+    priority:   int = PRIORITY_NORMAL
+
+
+@dataclass
+class Notice:
+    """Something to show on screen (BBP amendment 18). -> BBP notify. Spoken
+    alerts keep their own path (SpeakRequest); this is the visual copy."""
+    level:    str                # "info" | "warn" | "alert"
+    title:    str
+    body:     str = ""
+    priority: int = PRIORITY_NORMAL
+
+
+@dataclass
+class TimerFinished:
+    """A set_timer timer went off (AgentExecutor). -> BBP notify "Timer"."""
+    label:    str
+    priority: int = PRIORITY_NORMAL

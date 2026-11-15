@@ -17,14 +17,20 @@ public sealed class HudViewModel : INotifyPropertyChanged
 
     private readonly BodyState _state = new();
     private readonly DispatcherTimer _noticeTimer = new();
+    private readonly DispatcherTimer _notificationTimer = new();
     private ConnectionState _connection = ConnectionState.Disconnected;
     private string _statusDetail = "starting";
     private string _notice = "";
+    private NotifyPayload? _notification;
 
     public HudViewModel()
     {
         _noticeTimer.Tick += (_, _) => ClearNotice();
+        _notificationTimer.Tick += (_, _) => ClearNotification();
     }
+
+    /// <summary>A new notify arrived (App also shows it as a Windows notification).</summary>
+    public event Action<NotifyPayload>? NotificationArrived;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -84,8 +90,35 @@ public sealed class HudViewModel : INotifyPropertyChanged
 
     public void OnEvent(Envelope message)
     {
-        if (_state.Apply(message))
-            RaiseAll();
+        if (!_state.Apply(message))
+            return;
+        if (message.Topic == Topics.Notify && _state.LastNotification is { } note)
+        {
+            _notification = note;
+            _notificationTimer.Stop();
+            _notificationTimer.Interval = NotificationView.ShowFor(note.Level);
+            _notificationTimer.Start();
+            NotificationArrived?.Invoke(note);
+        }
+        RaiseAll();
+    }
+
+    /// <summary>The notification card (reminder, timer, alert): title, body, colour.</summary>
+    public string NotificationTitle => _notification?.Title ?? "";
+    public string NotificationBody => _notification?.Body ?? "";
+    public bool HasNotification => _notification is not null;
+    public Brush NotificationBrush => _notification?.Level switch
+    {
+        "alert" => Red,
+        "warn" => Amber,
+        _ => Brushes.DeepSkyBlue,
+    };
+
+    public void ClearNotification()
+    {
+        _notificationTimer.Stop();
+        _notification = null;
+        RaiseAll();
     }
 
     public void OnTyped(string text)

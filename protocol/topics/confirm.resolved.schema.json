@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/confirm.resolved.schema.json",
+  "title": "confirm.resolved (event, Brain -> Body) payload",
+  "description": "A confirmation was settled, by whoever answered first. Every Body closes its dialog.",
+  "type": "object",
+  "required": ["confirm_id", "approved", "by"],
+  "properties": {
+    "confirm_id": { "type": "string", "minLength": 1 },
+    "approved": { "type": "boolean" },
+    "by": { "enum": ["body", "voice", "text", "timeout", "error"] }
+  },
+  "additionalProperties": true
+}

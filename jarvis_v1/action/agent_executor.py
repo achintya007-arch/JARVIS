@@ -33,6 +33,7 @@ except Exception:
     _NVML_OK = False
 
 from action import app_launcher
+from action.confirmation import ConfirmRequest, describe
 from action.desktop_errors import DesktopError, DesktopUnavailable
 from action.tools.screen_tool import ScreenTool
 from action.tools.web_tools import get_weather, web_search
@@ -44,6 +45,9 @@ log = logging.getLogger("jarvis.agent")
 SpeakCallback = Callable[[str], Awaitable[None]]
 # Returns True if the user approves the action, False to deny.
 ConfirmCallback = Callable[[str], Awaitable[bool]]
+# Same, given the whole request (prompt, detail, risk): the V3 confirmation broker.
+ConfirmRequestCallback = Callable[[ConfirmRequest], Awaitable[bool]]
+TimerDoneCallback = Callable[[str], None]
 
 # ── Shell-safety controls ─────────────────────────────────────────────────────
 # Denylists are a losing game for a shell gate (curl|bash, powershell -enc,
@@ -151,6 +155,8 @@ class AgentExecutor:
         speak_callback: SpeakCallback | None = None,
         confirm_callback: ConfirmCallback | None = None,
         vault_tools=None,
+        confirm_request_callback: ConfirmRequestCallback | None = None,
+        timer_done_callback: TimerDoneCallback | None = None,
     ):
         self.config = config
         # Vault tools (ObsidianTools) — only present in V3 (Brain has a vault).
@@ -174,6 +180,10 @@ class AgentExecutor:
         # actions FAIL CLOSED (denied) rather than hanging on stdin — the old
         # input() default was unanswerable in voice mode (audit C3).
         self._confirm     = confirm_callback
+        # V3: the confirmation broker gets the whole request (detail, risk) and
+        # races voice, console and Body dialogs. Preferred over confirm_callback.
+        self._confirm_request = confirm_request_callback
+        self._timer_done  = timer_done_callback       # V3: BBP notify "Timer"
 
         # Sprint D: ScreenTool — instantiated once, reused across all calls
         self._screen = ScreenTool(
@@ -542,6 +552,11 @@ class AgentExecutor:
         async def _fire():
             await asyncio.sleep(duration_seconds)
             self._timers.pop(timer_id, None)      # done: off the displays before the alert
+            if self._timer_done is not None:
+                try:
+                    self._timer_done(label)
+                except Exception as e:            # a display must never stop the alert
+                    log.debug("timer_done callback failed: %s", e)
             alert = f"Sir, your {label} timer is complete."
             print(
                 f"\n{'='*52}\n  [TIMER] JARVIS -- {label.upper()}\n{'='*52}\n",
@@ -762,14 +777,18 @@ class AgentExecutor:
         Brain). If no channel is available, FAIL CLOSED (deny) rather than block
         on stdin — the previous input() default was unanswerable in voice mode.
         """
-        prompt = f"About to run {tool}. Shall I proceed, Sir?"
-        if self._confirm is None:
+        request = describe(tool, args)
+        if self._confirm_request is None and self._confirm is None:
             log.warning(
                 "Confirmation required for %s but no confirm channel wired — denying.", tool
             )
             return False
         try:
-            return await self._confirm(prompt)
+            if self._confirm_request is not None:
+                return await self._confirm_request(request) is True
+            return await self._confirm(request.prompt) is True
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             log.warning("Confirmation callback failed (%s) — denying.", e)
             return False

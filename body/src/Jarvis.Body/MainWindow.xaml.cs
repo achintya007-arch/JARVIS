@@ -72,6 +72,12 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void OnNotificationClick(object sender, MouseButtonEventArgs e)
+    {
+        (DataContext as HudViewModel)?.ClearNotification();
+        e.Handled = true;
+    }
+
     private void OnHide(object sender, RoutedEventArgs e) => Hide();
 
     private void OnQuit(object sender, RoutedEventArgs e) => Application.Current.Shutdown();

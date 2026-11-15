@@ -35,6 +35,7 @@ from core_v3.voice.state import VoiceState, VoiceStateManager
 
 log = logging.getLogger("jarvis.voice")
 
+NO_CONFIRMATION_HEARD = "No confirmation heard, Sir. I'll hold off."
 _AFFIRMATIVE_RE = re.compile(
     r"^\s*(?:yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead|affirmative)\b", re.IGNORECASE
 )
@@ -496,20 +497,39 @@ class VoiceOrchestrator:
         captures ONE utterance and matches yes/no. Fails closed (denies) on
         timeout or empty, so a gated action never proceeds without an explicit
         yes."""
+        answer = await self.listen_for_confirmation(prompt, 15.0)
+        if answer is None:
+            await self.speak(NO_CONFIRMATION_HEARD)
+            return False
+        return answer
+
+    async def listen_for_confirmation(self, prompt: str, timeout: float) -> bool | None:
+        """The voice channel of a confirmation (ConfirmationBroker): speak the
+        prompt, then capture ONE utterance before `timeout` (counted from now,
+        prompt included). "yes"-like → True; anything else said → False;
+        nothing heard in time → None, so a Body's dialog can still answer.
+        Cancellation (someone else answered) stops listening at once; the
+        prompt still finishes playing."""
+        deadline = asyncio.get_running_loop().time() + timeout
         self._confirming = True
         try:
-            await self.speak(prompt)
+            await asyncio.shield(self.speak(prompt))
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0 or self._muted:
+                return None
             q = self._mic.subscribe()
             try:
-                audio, _ = await asyncio.wait_for(self._endpointer.capture(q), timeout=15.0)
+                audio, _ = await asyncio.wait_for(self._endpointer.capture(q), timeout=remaining)
             except asyncio.TimeoutError:
-                await self.speak("No confirmation heard, Sir. I'll hold off.")
-                return False
+                return None
             finally:
                 self._mic.unsubscribe(q)
             if audio is None:
-                return False
-            answer = await self._stt.transcribe(audio)
+                return None
+            answer = (await self._stt.transcribe(audio)).strip()
+            if not answer:
+                return None
+            log.info("confirmation answer heard: %r", answer)
             return bool(_AFFIRMATIVE_RE.match(answer))
         finally:
             self._confirming = False

@@ -54,7 +54,7 @@
         },
         "pending_confirmations": {
           "type": "array",
-          "description": "Each item has the confirm.request payload shape.",
+          "description": "Each item has the confirm.request payload shape; timeout_s is the time left when the snapshot was taken.",
           "items": {
             "type": "object",
             "required": ["confirm_id", "prompt", "risk", "timeout_s"],
@@ -62,7 +62,8 @@
               "confirm_id": { "type": "string", "minLength": 1 },
               "prompt": { "type": "string" },
               "risk": { "enum": ["low", "high"] },
-              "timeout_s": { "type": "number", "exclusiveMinimum": 0 }
+              "timeout_s": { "type": "number", "exclusiveMinimum": 0 },
+              "detail": { "type": "string", "maxLength": 400 }
             },
             "additionalProperties": true
           }

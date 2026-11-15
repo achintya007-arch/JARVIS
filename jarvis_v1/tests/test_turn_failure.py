@@ -22,6 +22,7 @@ from cognition.agent_state import AgentState
 from cognition.decision_engine import DecisionEngine
 from core.config import VoiceConfig
 from core_v3.brain import Brain
+from core_v3.console import ConsoleInput
 from core_v3.conversation import (
     LLM_UNREACHABLE_REPLY,
     TURN_FAILED_REPLY,
@@ -90,6 +91,7 @@ def _text_brain(conversation):
     brain._stopped = False
     brain._conversation = conversation
     brain._turn_lock = asyncio.Lock()
+    brain._console = ConsoleInput()
     return brain
 
 

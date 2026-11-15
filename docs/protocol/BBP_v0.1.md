@@ -96,7 +96,7 @@ Events mirror what already flows on the `EventBus`, so the server is a thin adap
 | `tool.finished` | `call_id`, `ok`, `summary` | Tick or error badge |
 | `agent.state` | `mood`, `intent`, `model`, `load` (VRAM %, RAM %) | Status strip; shows fallback-model downshifts |
 | `notify` | `notify_id`, `level` (info, warn, alert), `title`, `body`, `actions[]` | Windows toast plus HUD card |
-| `confirm.request` | `confirm_id`, `prompt`, `risk` (low, high), `timeout_s` | Approve or deny dialog |
+| `confirm.request` | `confirm_id`, `prompt`, `risk` (low, high), `timeout_s`, optional `detail` (amendment 17) | Approve or deny dialog |
 | `confirm.resolved` | `confirm_id`, `approved` (bool), `by` (body, voice, text, timeout, error) | Closes the dialog on every Body, whoever answered |
 | `sentinel.finding` | Reserved for v0.2 | Intelligence alerts |
 
@@ -228,6 +228,22 @@ Additive changes made while implementing milestones 1–3; `v` stays `1`.
     - The tree is capped (default depth 12, 300 nodes, names cut to 200 characters). `result` is `{ app, title, root, node_count, truncated }`, where each node is `{ name, control_type, automation_id, children }` and empty fields are omitted.
 14. **Desktop responses (proposed with milestone "safe desktop"):** a successful request is answered by a `response` on the **same topic** with payload `{ ok: true, result }`, validated against `protocol/topics/<topic>.response.schema.json`. A failed one is answered like a refused command: a `response` with topic `error`, `corr` set to the request `id`, and `{ ok: false, error }` (codes from the table above, plus `E_TIMEOUT` when the Brain gives up after 5 s, and a new `E_INTERNAL` for an unexpected failure on the receiving side).
 15. **Desktop capabilities and the Body allowlist (proposed):** `apps` covers `desktop.app.launch` and `desktop.window.*`, `audio` covers `desktop.audio.*`, and `uia` covers `desktop.uia.*`. The Brain sends a desktop request only to a Body that declared the capability. The Body's allowlist (`desktop.allowlist.json`, next to the Body executable) names the apps it may launch, focus or read; `desktop.window.list` lists every real window but marks each with `allowed`.
+
+16. **Confirmation answers (approved, milestone 3):**
+    - `confirm.response` with a `confirm_id` that isn't pending (unknown, already answered, or timed out) is refused with `E_NOT_FOUND`. The first answer wins; later ones change nothing.
+    - Who can answer: the dialog on any Body (`by: body`), your voice (`by: voice`), and the Brain's own console in text mode (`by: text`). Typed input through BBP (`input.text`, from the HUD box, `tools/jarvis_send` or a phone button) never answers a confirmation: while one is pending, `input.text` is refused with `E_BUSY`.
+    - With the microphone muted, voice doesn't answer; the dialog (or the console in text mode) is the only way.
+    - Fail closed: the deadline runs from when the request is sent, for every channel. No answer by `timeout_s` resolves `by: timeout`, denied. A failure while asking, a cancelled turn, or a HUD Body (capability `hud`) disconnecting while a confirmation is pending resolves `by: error`, denied.
+17. **`confirm.request.detail` (approved, milestone 3):** an optional string naming exactly what would run: the shell command, the file path (and size), the app, or the window title. It can come from the LLM, so control and bidirectional-override characters are removed, it's cut to 200 characters, and the Body shows it as plain text. `pending_confirmations` items in the `welcome` snapshot carry it too, with `timeout_s` set to the time left.
+18. **What becomes a `notify` (approved, milestone 3):** the Brain keeps speaking these as before (except suggestions, which V3 doesn't speak today); the Body shows them on screen (a HUD card and a Windows notification) and never speaks them.
+
+    | Source | `level` | `title` |
+    | --- | --- | --- |
+    | Goal suggestion ("shall I open Spotify?") | `info` | Suggestion |
+    | Goal reminder | `warn` | Reminder |
+    | Timer finished | `warn` | Timer |
+    | Resource pressure starts (model switch) | `alert` | Resource pressure |
+    | Resource pressure clears | `info` | Resources |
 
 ### Brain configuration (`config.yaml`, section `bbp`)
 

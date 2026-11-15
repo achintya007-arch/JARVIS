@@ -20,7 +20,8 @@ public sealed record LoadSnapshot(double? RamPct, double? VramPct);
 
 public sealed record GoalSnapshot(string Name, int Priority);
 
-public sealed record PendingConfirmation(string ConfirmId, string Prompt, string Risk, double TimeoutS);
+/// <summary>A confirm.request still waiting; in the welcome snapshot TimeoutS is the time left.</summary>
+public sealed record PendingConfirmation(string ConfirmId, string Prompt, string Risk, double TimeoutS, string? Detail = null);
 
 public sealed record VoiceStatePayload(string State, bool Muted);
 
@@ -41,6 +42,20 @@ public sealed record VoiceControlPayload(string Action);
 
 public sealed record HotkeyPayload(string Name);
 
+// Milestone 3: notifications and confirmations
+
+public sealed record NotifyAction(string Action, string Label);
+
+/// <summary>level: info, warn, alert. Actions is always empty in v0.1.</summary>
+public sealed record NotifyPayload(string NotifyId, string Level, string Title, string Body, IReadOnlyList<NotifyAction> Actions);
+
+/// <summary>by: body, voice, text, timeout, error.</summary>
+public sealed record ConfirmResolvedPayload(string ConfirmId, bool Approved, string By);
+
+public sealed record ConfirmResponsePayload(string ConfirmId, bool Approved);
+
+public sealed record NotifyActionPayload(string NotifyId, string Action);
+
 public sealed record ErrorPayload(bool Ok, ErrorInfo Error);
 
 public static class Topics
@@ -53,4 +68,9 @@ public static class Topics
     public const string InputText = "input.text";
     public const string VoiceControl = "voice.control";
     public const string UiHotkey = "ui.hotkey";
+    public const string Notify = "notify";
+    public const string NotifyAction = "notify.action";
+    public const string ConfirmRequest = "confirm.request";
+    public const string ConfirmResolved = "confirm.resolved";
+    public const string ConfirmResponse = "confirm.response";
 }

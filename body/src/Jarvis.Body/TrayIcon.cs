@@ -81,6 +81,12 @@ public sealed class TrayIcon : IDisposable
         _showHide.Text = hudVisible ? "Hide HUD" : "Show HUD";
     }
 
+    /// <summary>A Windows notification from the tray icon (a toast on Windows 10/11).</summary>
+    public void ShowNotification(string title, string body, string level)
+    {
+        _icon.ShowBalloonTip(5000, title, NotificationView.TrayText(title, body), NotificationView.TrayIcon(level));
+    }
+
     public void Dispose()
     {
         _icon.Visible = false;

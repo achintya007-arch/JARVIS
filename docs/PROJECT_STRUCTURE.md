@@ -36,6 +36,9 @@ jarvis_v1/
 │   ├── __main__.py         # Entry point  (python -m core_v3)
 │   ├── brain.py            # Composition root: wires cognition + voice layer
 │   ├── conversation.py     # ConversationEngine — text → response sentences
+│   ├── confirmations.py    # ConfirmationBroker: voice / console / Body dialogs race
+│   │                       #   to approve a gated action; fail closed (BBP confirm.*)
+│   ├── console.py          # ConsoleInput: text-mode stdin shared by chat + confirmations
 │   │                       #   (clean cognition boundary; no audio)
 │   ├── voice/              # Voice state machine + orchestration
 │   │   ├── state.py        #   VoiceState / VoiceStateManager
@@ -45,7 +48,8 @@ jarvis_v1/
 │   │   ├── resource.py     #   ResourceAdapter (model switching on pressure)
 │   │   ├── bbp_protocol.py #   Brain–Body Protocol envelopes + schema validation
 │   │   ├── bbp_server.py   #   BBP WebSocket server (off unless bbp.enabled)
-│   │   ├── bbp_commands.py #   Body commands: input.text, voice.control, ui.hotkey
+│   │   ├── bbp_commands.py #   Body commands: input.text, voice.control, ui.hotkey,
+│   │   │                   #   confirm.response, notify.action
 │   │   └── remote_desktop.py # desktop.* requests to the Body (routing for desktop tools)
 │   ├── event_bus.py
 │   └── events.py           # V3 events incl. VoiceStateChanged, TranscriptReady,
@@ -116,6 +120,7 @@ jarvis_v1/
 │   ├── test_web_rag.py / test_fineweb_pipeline.py
 │   ├── test_bbp_contract.py / test_bbp_server.py / test_bbp_events.py
 │   ├── test_bbp_commands.py / test_voice_body_controls.py
+│   ├── test_confirmations.py   # confirmation broker, console, confirm.* + notify over BBP
 │   ├── test_remote_desktop.py  # desktop requests, routing, fallback, read_screen_ui
 │   └── test_phase_f.py
 │

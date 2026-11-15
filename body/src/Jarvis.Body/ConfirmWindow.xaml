@@ -1,0 +1,81 @@
+<Window x:Class="Jarvis.Body.ConfirmWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="JARVIS: approve this action?"
+        Width="420" SizeToContent="Height"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize" ShowActivated="False"
+        FontFamily="Segoe UI" Foreground="#E8EEF2"
+        MouseLeftButtonDown="OnDrag" Loaded="OnLoaded">
+    <!-- ShowActivated=False: the dialog never steals focus, so keys you were
+         typing elsewhere can't answer it. Deny is the default and cancel button. -->
+    <Border CornerRadius="12" Background="#F5101418" BorderThickness="1" Padding="16,12,16,14">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="BorderBrush" Value="#88F5B731" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding HighRisk}" Value="True">
+                        <Setter Property="BorderBrush" Value="#CCF25C54" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+        <StackPanel>
+            <DockPanel LastChildFill="False">
+                <TextBlock DockPanel.Dock="Left" Text="JARVIS asks" FontWeight="SemiBold" FontSize="13" />
+                <TextBlock DockPanel.Dock="Right" Text="{Binding TimeLeft}" FontSize="12" Foreground="#8A939B" />
+            </DockPanel>
+            <TextBlock Text="{Binding RiskLabel}" FontSize="11" Margin="0,2,0,0">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="#F5B731" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HighRisk}" Value="True">
+                                <Setter Property="Foreground" Value="#F25C54" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <TextBlock Text="{Binding Prompt}" FontSize="14" TextWrapping="Wrap" Margin="0,10,0,0" />
+
+            <!-- The exact command / file / app / window, as plain text. -->
+            <Border Background="#1C232A" CornerRadius="6" Padding="8,6" Margin="0,8,0,0">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasDetail}" Value="False">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock Text="{Binding Detail}" FontFamily="Consolas" FontSize="12.5" TextWrapping="Wrap" />
+            </Border>
+
+            <ProgressBar Value="{Binding FractionLeft, Mode=OneWay}" Minimum="0" Maximum="1" Height="3"
+                         Margin="0,12,0,0" Background="#1C232A" BorderThickness="0" Foreground="#00C8E6" />
+
+            <DockPanel LastChildFill="False" Margin="0,12,0,0">
+                <Button x:Name="ApproveButton" DockPanel.Dock="Right" Content="Approve" Width="96" Padding="0,5"
+                        Margin="8,0,0,0" Click="OnApprove" IsEnabled="{Binding CanAnswer}"
+                        Focusable="{Binding ApproveFocusable}" IsTabStop="{Binding ApproveFocusable}" />
+                <Button x:Name="DenyButton" DockPanel.Dock="Right" Content="Deny" Width="96" Padding="0,5"
+                        IsDefault="True" IsCancel="True" Click="OnDeny" IsEnabled="{Binding CanAnswer}" />
+            </DockPanel>
+            <TextBlock Text="{Binding Status}" FontSize="11.5" Foreground="#F5B731" TextWrapping="Wrap"
+                       Margin="0,8,0,0">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Style.Triggers>
+                            <Trigger Property="Text" Value="">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </StackPanel>
+    </Border>
+</Window>

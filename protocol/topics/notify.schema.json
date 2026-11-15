@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/notify.schema.json",
+  "title": "notify (event, Brain -> Body) payload",
+  "description": "Something JARVIS wants you to see: a goal reminder, a suggestion, a finished timer, resource pressure (amendment 18). The Body shows it on screen and never speaks it; the Brain already does. actions is always empty in v0.1.",
+  "type": "object",
+  "required": ["notify_id", "level", "title", "body", "actions"],
+  "properties": {
+    "notify_id": { "type": "string", "minLength": 1 },
+    "level": { "enum": ["info", "warn", "alert"] },
+    "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "body": { "type": "string", "maxLength": 1000 },
+    "actions": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["action", "label"],
+        "properties": {
+          "action": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
