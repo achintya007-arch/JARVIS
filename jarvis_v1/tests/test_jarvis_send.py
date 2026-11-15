@@ -82,3 +82,19 @@ def test_needs_text_or_voice():
         jarvis_send.main([])
     with pytest.raises(SystemExit):
         jarvis_send.main(["hi", "--voice", "mute"])
+
+
+@pytest.mark.parametrize("url", [
+    "ws://192.168.1.5:8765/bbp", "ws://example.com/bbp", "wss://127.0.0.1.example.com/bbp",
+    "http://127.0.0.1:8765/bbp",
+])
+def test_token_never_goes_off_this_pc(url, monkeypatch):
+    # Refused before the token is even read.
+    monkeypatch.setattr(jarvis_send, "resolve_token_path", lambda p: pytest.fail("token read"))
+    with pytest.raises(SystemExit):
+        jarvis_send.main(["hi", "--url", url])
+
+
+@pytest.mark.parametrize("url", ["ws://127.0.0.1:8765/bbp", "ws://localhost:8765/bbp", "ws://[::1]:8765/bbp"])
+def test_loopback_urls_are_accepted(url):
+    assert jarvis_send.is_loopback_ws(url)

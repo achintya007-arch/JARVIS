@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import json
 import sys
+import urllib.parse
 
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed
@@ -27,6 +28,14 @@ from core_v3.adapters.bbp_server import resolve_token_path
 
 # A refusal (E_BUSY…) comes back almost at once; an accepted command gets no response.
 REFUSAL_WAIT_S = 1.5
+
+
+def is_loopback_ws(url: str) -> bool:
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except ValueError:
+        return False
+    return parts.scheme == "ws" and (parts.hostname or "") in {"127.0.0.1", "localhost", "::1"}
 
 
 def build_command(text: str | None, voice: str | None) -> dict:
@@ -79,6 +88,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if bool(args.text and args.text.strip()) == bool(args.voice):
         ap.error("give either some text or --voice ACTION")
+    if not is_loopback_ws(args.url):
+        # The BBP token goes in the first message; never send it off this PC.
+        ap.error(f"--url must be ws://127.0.0.1:<port>/... (loopback), not {args.url!r}")
 
     token_path = resolve_token_path(args.token_path)   # relative to jarvis_v1/, from any folder
     if not token_path.is_file():
