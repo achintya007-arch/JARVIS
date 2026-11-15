@@ -254,6 +254,22 @@ class BBPConfig:
     request_timeout_s: float = 5.0      # Brain → Body desktop.* request → E_TIMEOUT
 
 
+@dataclass
+class PhoneBoxConfig:
+    """Mirror JARVIS's state on a PhoneBox desk panel (core_v3/adapters/phonebox.py).
+    Off by default; enable with `phonebox: {enabled: true}` in config.yaml. PhoneBox
+    is a separate program; JARVIS works the same whether or not it is running."""
+    enabled: bool = False
+    # The PhoneBox agent's local address. PhoneBox defaults to 8765, which BBP also
+    # uses, so run PhoneBox with `--port 8780` (or change this to match). Loopback only.
+    url: str = "http://127.0.0.1:8780"
+    show_transcripts: bool = True       # push what JARVIS heard (jarvis_heard)
+    show_replies: bool = True           # push JARVIS's last reply (jarvis_reply)
+    notify: bool = True                 # goal reminders and resource alerts as phone notifications
+    page: str = ""                      # PhoneBox page id to switch to with a notification ("" = stay)
+    timeout_s: float = 2.0              # per webhook post
+
+
 # =========================
 # MAIN CONFIG
 # =========================
@@ -266,6 +282,7 @@ class Config:
     wake: WakeConfig = field(default_factory=WakeConfig)
     voice: VoiceConfig = field(default_factory=VoiceConfig)
     bbp: BBPConfig = field(default_factory=BBPConfig)
+    phonebox: PhoneBoxConfig = field(default_factory=PhoneBoxConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     resources: ResourceConfig = field(default_factory=ResourceConfig)
     vault: VaultConfig = field(default_factory=VaultConfig)

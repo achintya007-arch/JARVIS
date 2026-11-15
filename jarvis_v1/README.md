@@ -126,6 +126,18 @@ reading the screen). Off by default; voice and text mode work without it. See
 the [root README](../README.md#optional-desktop-hud-brainbody-protocol) and
 [`../body/README.md`](../body/README.md).
 
+### Optional: phone desk panel (PhoneBox)
+
+With `phonebox: {enabled: true}`, `core_v3/adapters/phonebox.py` mirrors the
+voice state, transcript, reply, model, reminders, active goals and a live timer
+countdown to a local
+[PhoneBox](https://github.com/ersinkoc/phonebox) agent as webhook values
+(loopback only, fire-and-forget; JARVIS never waits on it).
+`python -m tools.jarvis_send` sends one BBP command (`input.text` or
+`voice.control`) for PhoneBox shortcut keys. PhoneBox defaults to port 8765 like
+BBP, so run it with `--port 8780`. See the
+[root README](../README.md#optional-phone-desk-panel-phonebox).
+
 ## Testing
 
 Portable unit + security tests (no GPU/desktop/Ollama required):

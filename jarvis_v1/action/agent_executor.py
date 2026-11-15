@@ -14,6 +14,7 @@ import asyncio
 import logging
 import re
 import shlex
+import time
 import webbrowser
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -188,6 +189,9 @@ class AgentExecutor:
 
         # Fix #6: track timer tasks so they can be cancelled on shutdown.
         self._timer_tasks: set[asyncio.Task] = set()
+        # Running timers by id, for displays (active_timers(); the PhoneBox panel).
+        self._timers: dict[int, dict[str, Any]] = {}
+        self._next_timer_id = 1
 
         # Desktop control through the C# Body (BBP), attached by the V3 Brain
         # when bbp.enabled. None → always the Python implementation (V2, tests).
@@ -219,6 +223,17 @@ class AgentExecutor:
         if self._timer_tasks:
             await asyncio.gather(*self._timer_tasks, return_exceptions=True)
         self._timer_tasks.clear()
+        self._timers.clear()
+
+    def active_timers(self) -> list[dict[str, Any]]:
+        """Running timers, soonest first: id, label, duration (s), ends_at
+        (time.monotonic() seconds) and remaining (s)."""
+        now = time.monotonic()
+        timers = [
+            {**t, "id": tid, "remaining": max(0.0, t["ends_at"] - now)}
+            for tid, t in self._timers.items()
+        ]
+        return sorted(timers, key=lambda t: t["ends_at"])
 
     async def execute(self, plan: list[dict[str, Any]]) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
@@ -521,9 +536,12 @@ class AgentExecutor:
 
     async def _set_timer(self, duration_seconds: int, label: str) -> str:
         speak = self._speak
+        timer_id = self._next_timer_id
+        self._next_timer_id += 1
 
         async def _fire():
             await asyncio.sleep(duration_seconds)
+            self._timers.pop(timer_id, None)      # done: off the displays before the alert
             alert = f"Sir, your {label} timer is complete."
             print(
                 f"\n{'='*52}\n  [TIMER] JARVIS -- {label.upper()}\n{'='*52}\n",
@@ -535,9 +553,18 @@ class AgentExecutor:
                 except Exception as e:
                     log.warning("Timer TTS failed: %s", e)
 
+        self._timers[timer_id] = {
+            "label": label, "duration": duration_seconds,
+            "ends_at": time.monotonic() + duration_seconds,
+        }
+
+        def _done(t: asyncio.Task) -> None:
+            self._timer_tasks.discard(t)
+            self._timers.pop(timer_id, None)
+
         task = asyncio.create_task(_fire())
         self._timer_tasks.add(task)
-        task.add_done_callback(self._timer_tasks.discard)
+        task.add_done_callback(_done)
 
         mins, secs = divmod(duration_seconds, 60)
         hours, mins = divmod(mins, 60)

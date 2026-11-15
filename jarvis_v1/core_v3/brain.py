@@ -28,6 +28,7 @@ from core.config import Config
 from core_v3.adapters import ResourceAdapter
 from core_v3.adapters.bbp_commands import BBPCommands
 from core_v3.adapters.bbp_server import BBPServer
+from core_v3.adapters.phonebox import PhoneBoxAdapter
 from core_v3.adapters.remote_desktop import RemoteDesktop
 from core_v3.conversation import TURN_FAILED_REPLY, ConversationEngine
 from core_v3.event_bus import EventBus
@@ -133,6 +134,15 @@ class Brain:
                 fallback=config.bbp.desktop_fallback,
             )
 
+        # PhoneBox desk panel (a phone showing JARVIS's state). Optional and
+        # isolated like BBP: a bus observer that posts to the local PhoneBox agent.
+        self._phonebox: PhoneBoxAdapter | None = None
+        if config.phonebox.enabled:
+            self._phonebox = PhoneBoxAdapter(
+                config.phonebox, self._bus, current_model=lambda: self._llm.current_model,
+                timers=self._executor.active_timers, goals=self._active_goals,
+            )
+
     # Late-bound executor callbacks → orchestrator.
     async def _speak_cb(self, text: str) -> None:
         if self._orchestrator is not None:
@@ -147,6 +157,12 @@ class Brain:
         # Resource alerts etc. — speak only when idle so we never talk over a turn.
         if self._orchestrator is not None and self._orchestrator.state.is_(VoiceState.IDLE):
             await self._orchestrator.speak(event.text)
+
+    def _active_goals(self) -> list[dict]:
+        return [
+            {"name": g.name, "priority": int(g.priority)}
+            for g in self._agent_state.active_goals if g.is_active
+        ]
 
     def _bbp_snapshot(self) -> dict:
         """State a Body needs to redraw instantly (BBP welcome.snapshot)."""
@@ -163,14 +179,10 @@ class Brain:
             "model": self._llm.current_model,
             "load": {"ram_pct": res.get("ram_pct"), "vram_pct": res.get("vram_pct")},
         }
-        goals = [
-            {"name": g.name, "priority": int(g.priority)}
-            for g in self._agent_state.active_goals if g.is_active
-        ]
         return {
             "voice": voice,
             "agent": agent,
-            "active_goals": goals,
+            "active_goals": self._active_goals(),
             "pending_confirmations": [],     # milestone 3: confirmation broker
         }
 
@@ -186,6 +198,8 @@ class Brain:
         self._goal_task = asyncio.create_task(self._goal_manager.run())
         if self._bbp is not None:
             await self._bbp.start()          # logs and carries on if it can't bind
+        if self._phonebox is not None:
+            await self._phonebox.start()     # never fails; PhoneBox may start later
         self._bus.publish(SystemEvent(kind="startup"))
 
         mode = getattr(self.config, "mode", "wake")
@@ -233,6 +247,7 @@ class Brain:
         # step was cancelled during shutdown.
         steps = [
             ("bbp",              self._bbp.stop if self._bbp else None),
+            ("phonebox",         self._phonebox.stop if self._phonebox else None),
             ("orchestrator",     self._orchestrator.stop if self._orchestrator else None),
             ("goal_manager",     self._goal_manager.close),
             ("resource_monitor", self._resource_monitor.stop),
