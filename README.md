@@ -11,6 +11,8 @@ local [Piper](https://github.com/OHF-Voice/piper1-gpl) (with
 long-term memory lives in a local [Obsidian](https://obsidian.md) vault + an
 on-disk vector index. A few tools do go online: weather (wttr.in), web search
 (DuckDuckGo), and the edge-tts voice when no local Piper voice is installed.
+If you turn on the optional [PhoneBox panel](#optional-phone-desk-panel-phonebox),
+what you say and JARVIS's replies are shown on your phone.
 
 > **Platform:** Windows-targeted (desktop-control tools use Windows APIs; the
 > core conversation loop is cross-platform).
@@ -281,6 +283,62 @@ bbp:
   desktop_fallback: true   # no Body connected → use the Python desktop tools
   request_timeout_s: 5     # how long the Brain waits for the Body to answer
 ```
+
+### Optional: phone desk panel (PhoneBox)
+
+[PhoneBox](https://github.com/ersinkoc/phonebox) is a separate program that
+turns a phone into a desk panel for your PC. JARVIS can show its state there,
+and phone buttons can talk to JARVIS.
+
+**JARVIS → phone.** With this in `config.yaml`, JARVIS pushes its state to the
+PhoneBox agent's local webhooks
+([`core_v3/adapters/phonebox.py`](jarvis_v1/core_v3/adapters/phonebox.py)):
+
+```yaml
+phonebox:
+  enabled: true
+  url: http://127.0.0.1:8780   # the PhoneBox agent (loopback only)
+  show_transcripts: true       # what JARVIS heard
+  show_replies: true           # JARVIS's last reply
+  notify: true                 # goal reminders and resource alerts as notifications
+```
+
+| Pushed key | Shows |
+|---|---|
+| `jarvis` | Listening / Thinking / Speaking / Idle / Offline, with the model in use |
+| `jarvis_active` | `on` during a turn, for a PhoneBox rule that shows the JARVIS page while it lasts |
+| `jarvis_heard`, `jarvis_reply` | What JARVIS heard, and its last reply (one row per sentence) |
+| `jarvis_model`, `jarvis_muted` | The model in use; `on` while the microphone is muted |
+| `jarvis_timers` | A live countdown while a timer runs ("set a timer for 10 minutes"); one row per timer when there are several. A notification says when one is done |
+| `jarvis_goals` | Active goals, highest priority first (P8+ in the warning colour) |
+
+Show them with PhoneBox **Pushed value** widgets (style *Auto* for `jarvis_timers`, *List* for
+`jarvis_goals`). Timers and goals have no bus events, so the adapter reads them every second
+while a timer runs and every 5 seconds otherwise, and posts only changes.
+If PhoneBox is not running, JARVIS works exactly as before.
+
+**What reaches the phone.** The adapter itself only posts to `127.0.0.1`; a
+non-loopback `url` disables it. But PhoneBox then shows these values on your
+phone, so what you said to JARVIS and its replies do leave the PC, over
+PhoneBox's own connection to the phone (see PhoneBox's docs for how it
+connects). To keep them off the phone, set `show_transcripts: false` and
+`show_replies: false`; the state, timers and goals still show.
+
+**Phone → JARVIS.** A PhoneBox shortcut key runs a program on the PC.
+[`tools/jarvis_send.py`](jarvis_v1/tools/jarvis_send.py) sends one command to a
+running JARVIS over the Brain–Body Protocol (so `bbp.enabled` must be on):
+
+```bash
+python -m tools.jarvis_send "Give me a quick briefing for today"
+python -m tools.jarvis_send --voice wake      # or mute / unmute / cancel
+```
+
+For a key, use `jarvis_v1\venv\Scripts\pythonw.exe` as the program (no console
+window), `-m tools.jarvis_send --voice wake` as the arguments, and `jarvis_v1` as
+the working folder.
+
+**Ports.** PhoneBox and the BBP server both default to `8765`. Run PhoneBox with
+`--port 8780` (add it to PhoneBox's Startup shortcut) so the HUD keeps its port.
 
 ## Security posture
 
