@@ -34,7 +34,7 @@ from core_v3.confirmations import ConfirmationBroker
 from core_v3.console import ConsoleInput
 from core_v3.conversation import TURN_FAILED_REPLY, ConversationEngine
 from core_v3.event_bus import EventBus
-from core_v3.events import SpeakRequest, SystemEvent, TimerFinished
+from core_v3.events import SpeakRequest, SystemEvent, TimerFinished, ToolFinished, ToolStarted
 from core_v3.voice.orchestrator import _AFFIRMATIVE_RE, NO_CONFIRMATION_HEARD, VoiceOrchestrator
 from core_v3.voice.state import VoiceState
 from infra.resource_monitor import ResourceMonitor
@@ -86,6 +86,13 @@ class Brain:
             confirm_request_callback=self._confirm_request,
             timer_done_callback=lambda label: self._bus.publish(TimerFinished(label=label)),
         )
+        # Every tool call → bus → BBP tool.started / tool.finished (milestone 5).
+        self._executor.set_activity_callbacks(
+            lambda call_id, tool, summary: self._bus.publish(
+                ToolStarted(call_id=call_id, tool=tool, summary=summary)),
+            lambda call_id, tool, summary, status: self._bus.publish(
+                ToolFinished(call_id=call_id, tool=tool, summary=summary, status=status)),
+        )
         self._agent_core = AgentCore(
             llm=self._llm, executor=self._executor,
             max_turns=getattr(config, "agent_core_max_turns", 3),
@@ -128,7 +135,7 @@ class Brain:
         # created only when enabled; voice and text mode never depend on it.
         self._bbp: BBPServer | None = None
         if config.bbp.enabled:
-            self._bbp = BBPServer(config.bbp, self._bus, self._bbp_snapshot)
+            self._bbp = BBPServer(config.bbp, self._bus, self._bbp_snapshot, agent_fn=self._agent_status)
             BBPCommands(
                 orchestrator=self._orchestrator, conversation=self._conversation,
                 config=config.bbp, turn_lock=self._turn_lock,
@@ -219,6 +226,26 @@ class Brain:
             for g in self._agent_state.active_goals if g.is_active
         ]
 
+    def _agent_status(self) -> dict:
+        """BBP agent.state (also the welcome snapshot's `agent`). `fallback`:
+        JARVIS dropped to its lighter model under memory pressure."""
+        snap = self._agent_state.snapshot()
+        res = self._resource_monitor.snapshot()
+        model = self._llm.current_model
+        llm = self.config.llm
+        fallback_model = getattr(llm, "fallback_model", "") or ""
+
+        def pct(value):
+            return None if value is None else round(float(value), 1)
+
+        return {
+            "mood": str(snap.user_state),
+            "intent": str(snap.conversation_intent),
+            "model": str(model),
+            "fallback": bool(fallback_model) and model == fallback_model and model != llm.model,
+            "load": {"ram_pct": pct(res.get("ram_pct")), "vram_pct": pct(res.get("vram_pct"))},
+        }
+
     def _bbp_snapshot(self) -> dict:
         """State a Body needs to redraw instantly (BBP welcome.snapshot)."""
         orch = self._orchestrator
@@ -226,17 +253,9 @@ class Brain:
             "state": orch.state.state.value.lower() if orch else "idle",
             "muted": orch.muted if orch else False,
         }
-        snap = self._agent_state.snapshot()
-        res = self._resource_monitor.snapshot()
-        agent = {
-            "mood": snap.user_state,
-            "intent": snap.conversation_intent,
-            "model": self._llm.current_model,
-            "load": {"ram_pct": res.get("ram_pct"), "vram_pct": res.get("vram_pct")},
-        }
         return {
             "voice": voice,
-            "agent": agent,
+            "agent": self._agent_status(),
             "active_goals": self._active_goals(),
             "pending_confirmations": self._confirmations.pending(),
         }

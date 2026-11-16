@@ -342,6 +342,11 @@ console can answer too, and the first answer wins. **Notifications** (goal
 reminders, finished timers, resource alerts) appear as a card on the HUD and as
 a Windows notification. See
 [`body/README.md`](body/README.md#confirmations-and-notifications).
+While JARVIS works, the HUD lists **what it is doing**, one line per tool call
+("Opening Calculator…", then ✓, a grey "declined", or a red ✗), and the status
+line names the model in use, with a **fallback** badge when it has switched to
+its lighter model under memory pressure. See
+[`body/README.md`](body/README.md#what-jarvis-is-doing).
 
 ### Optional: phone desk panel (PhoneBox)
 

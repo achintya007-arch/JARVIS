@@ -88,6 +88,9 @@
                 }
               },
               "additionalProperties": true
+            },
+            "fallback": {
+              "type": "boolean"
             }
           },
           "additionalProperties": true
@@ -204,6 +207,41 @@
                   }
                 },
                 "additionalProperties": false
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "running_tools": {
+          "type": "array",
+          "description": "Amendment 23: tool calls still running when the snapshot was taken (tool.started payloads), oldest first; elapsed_s is how long each has run.",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "required": [
+              "call_id",
+              "tool",
+              "summary"
+            ],
+            "properties": {
+              "call_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "tool": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "elapsed_s": {
+                "type": "number",
+                "minimum": 0
               }
             },
             "additionalProperties": true

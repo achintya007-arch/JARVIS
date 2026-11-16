@@ -66,7 +66,7 @@ For the session kinds (`hello`, `welcome`, `ping`, `pong`), `topic` equals `kind
 The Body says hello, the Brain answers with a full state snapshot, and heartbeats detect a dead link within 15 s.
 
 1. **Body → `hello`:** `{ "client": "win-shell", "version": "0.1.0", "token": "…", "capabilities": ["hud", "notify", "hotkey", "uia", "audio", "apps"] }`
-2. **Brain → `welcome`:** `{ "session": "…", "brain_version": "3.x", "snapshot": { voice state, agent state, active goals, pending confirmations } }`. A wrong token closes the socket with code 4401.
+2. **Brain → `welcome`:** `{ "session": "…", "brain_version": "3.x", "snapshot": { voice state, agent state, active goals, pending confirmations, running tools } }`. A wrong token closes the socket with code 4401.
 3. **Heartbeat:** the Body sends `ping` every 5 s; the Brain answers `pong`. Three missed pongs means disconnected.
 4. **Reconnect:** the Body retries with backoff, and each new `welcome` snapshot lets the HUD redraw instantly without replaying history.
 5. **Capabilities matter:** the Brain only routes a desktop tool to the Body if the Body declared that capability. Otherwise the tool runs its Python version, or, with `bbp.desktop_fallback: false`, reports itself unavailable. `desktop.uia.read` has no Python version.
@@ -92,9 +92,9 @@ Events mirror what already flows on the `EventBus`, so the server is a thin adap
 | `voice.transcript` | `text`, `final` (bool), `confidence` (0–1 or null) | Live caption of what you said |
 | `reply.chunk` | `turn_id`, `seq`, `text` | Reply streams in sentence by sentence |
 | `reply.done` | `turn_id`, `interrupted` (bool) | Closes the reply card; `interrupted` is true if the reply was cut off (barge-in, cancel, or an error mid-reply) |
-| `tool.started` | `call_id`, `tool`, `summary` | "Opening VS Code…" |
-| `tool.finished` | `call_id`, `ok`, `summary` | Tick or error badge |
-| `agent.state` | `mood`, `intent`, `model`, `load` (VRAM %, RAM %) | Status strip; shows fallback-model downshifts |
+| `tool.started` | `call_id`, `tool`, `summary` (amendment 23) | "Opening VS Code…" |
+| `tool.finished` | `call_id`, `ok`, `summary`, optional `status` (ok, denied, error, cancelled) | Tick, grey "declined", or error badge |
+| `agent.state` | `mood`, `intent`, `model`, `load` (VRAM %, RAM %), optional `fallback` (bool) | Status strip; shows fallback-model downshifts |
 | `notify` | `notify_id`, `level` (info, warn, alert), `title`, `body`, `actions[]` | Windows toast plus HUD card |
 | `confirm.request` | `confirm_id`, `prompt`, `risk` (low, high), `timeout_s`, optional `detail` (amendment 17) | Approve or deny dialog |
 | `confirm.resolved` | `confirm_id`, `approved` (bool), `by` (body, voice, text, timeout, error) | Closes the dialog on every Body, whoever answered |
@@ -163,7 +163,7 @@ Success returns `{ "ok": true, "result": { … } }` and a failure returns `{ "ok
 1. Brain → `voice.state` `listening` after the wake word; the HUD ring lights up.
 2. Brain → `voice.transcript` `{ "text": "focus VS Code", "final": true }`.
 3. Brain → `voice.state` `processing`. The `FastRouter` matches it, so no LLM call.
-4. Brain → `tool.started` `{ "tool": "focus_window", "summary": "Focusing VS Code" }`.
+4. Brain → `tool.started` `{ "call_id": "…", "tool": "focus_window", "summary": "Switching to VS Code" }`.
 5. Brain → `request` `desktop.window.focus` `{ "app": "vscode" }` with `id: A1`.
 6. Body checks its allowlist, focuses the window, and replies `response` `desktop.window.focus` `{ "ok": true, "result": { "hwnd": 1314, "title": "JARVIS – Visual Studio Code", "app": "vscode" } }` with `corr: A1`.
 7. Brain → `tool.finished` `ok`, then `reply.chunk` "Done.", then `voice.state` `speaking`, then `idle`.
@@ -200,7 +200,7 @@ Build read-only first, then input, then confirmations, and only then let the Bod
 
 ## Amendments (Oct 15, 2026)
 
-Additive changes made while implementing milestones 1–4 and their follow-ups; `v` stays `1`.
+Additive changes made while implementing milestones 1–5 and their follow-ups; `v` stays `1`.
 
 1. **Session topics:** for `hello`, `welcome`, `ping` and `pong`, `topic` equals `kind`.
 2. **Command errors:** an unacceptable command gets a `response` with `topic: "error"`, `corr` set to the command's `id`, and an `{ ok: false, error }` payload.
@@ -264,6 +264,15 @@ Additive changes made while implementing milestones 1–4 and their follow-ups; 
     - **Not found:** the message suggests up to three names spelled within a third of the query's length (a swap of two letters counts as one edit): "did you mean 'Send'?". A suggestion is never pressed.
     - **Typing into a document:** `set_text` may fill a `Document` (Windows 11 Notepad's editor) only when the Value pattern reports it empty, because setting the value replaces everything; otherwise `E_NOT_ALLOWED`.
     - **Brain:** `desktop.uia.invoke` and `desktop.uia.set_text` wait up to 15 s (or `request_timeout_s`, if longer) for the Body. On `E_TIMEOUT` JARVIS says it can't tell whether it was done. `E_NOT_FOUND`, `E_TIMEOUT` and `E_BAD_PAYLOAD` read "I couldn't do that, Sir: …".
+
+23. **Live activity on the HUD (approved, milestone 5):**
+    - **Every tool call is reported.** The Brain sends `tool.started` when a call begins (before any confirmation is asked for) and `tool.finished` with the same `call_id` when it ends, whatever the tool and whether it ran in Python or on a Body.
+    - **`tool.finished.status`** (optional; `ok` stays required and is true only for `ok`): `ok` (done), `denied` (you declined, or it wasn't allowed: blocked tool, disabled shell, refused approval, `E_DENIED`/`E_NOT_ALLOWED`), `error` (it failed), `cancelled` (the turn was stopped while it ran; an addition to the milestone 5 proposal). The HUD shows ✓, a grey "declined" / "stopped", or a red ✗.
+    - **`summary`** is a fixed template per tool, never what the tool works on: no typed text, shell commands, file contents, search queries, clipboard text or URLs. Allowed: an allowlisted app's display name (a window title is shown only when it is an allowlisted app name, since it can name a document), a UI element's name, a file's base name, a city, a volume level, a timer length. Examples: "Opening Calculator", "Pressing 'Seven' in Calculator", "Running a shell command", "Writing notes.txt". Control, bidirectional and zero-width characters are removed, whitespace is collapsed, and the line is at most 80 characters. An unknown tool reads "Using <tool>".
+    - **`welcome` snapshot `running_tools`:** the calls started and not yet finished, oldest first, each `{ call_id, tool, summary, elapsed_s }` (at most 32; a call unfinished after 5 min is dropped), so a Body that reconnects mid-call shows them.
+    - **HUD:** one line per running call; its ✓ or ✗ stays 2 s; a line with no `tool.finished` clears itself after 30 s.
+    - **`agent.state` timing:** while a Body is connected the Brain checks its state every second. A change of `model`, `fallback`, `mood` or `intent` is sent at once. Load is sent at most every 5 s, and only when RAM or VRAM has moved by 5 points or more (or a reading appeared or vanished) since the last `agent.state`. The first state after start-up isn't sent: the `welcome` snapshot carries it.
+    - **`agent.state.fallback`** (optional, also in the `welcome` snapshot): true while the Brain has dropped to its lighter fallback model under resource pressure. The status strip shows the model name and a "fallback" badge.
 
 ### Brain configuration (`config.yaml`, section `bbp`)
 

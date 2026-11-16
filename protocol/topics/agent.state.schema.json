@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/agent.state.schema.json",
+  "title": "agent.state (event, Brain -> Body) payload",
+  "description": "Amendment 23: the status strip. Sent at once when model, fallback, mood or intent changes; for load, at most every 5 s and only after RAM or VRAM moves 5 points or more. Same shape as welcome.snapshot.agent.",
+  "type": "object",
+  "required": ["mood", "intent", "model", "load"],
+  "properties": {
+    "mood": { "type": "string", "maxLength": 40 },
+    "intent": { "type": "string", "maxLength": 40 },
+    "model": { "type": "string", "maxLength": 200 },
+    "fallback": { "type": "boolean", "description": "Running on the lighter fallback model (memory pressure)" },
+    "load": {
+      "type": "object",
+      "required": ["ram_pct", "vram_pct"],
+      "properties": {
+        "ram_pct": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "vram_pct": { "type": ["number", "null"], "minimum": 0, "maximum": 100 }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

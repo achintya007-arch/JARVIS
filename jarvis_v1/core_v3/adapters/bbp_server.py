@@ -9,6 +9,7 @@ into Brain actions (milestone 2+). It owns no cognition.
   Body → ping (every 5 s)  Brain → pong                   (silent > timeout: close 4408)
   Brain → voice.state / voice.transcript / reply.chunk / reply.done  (events)
   Brain → confirm.request / confirm.resolved / notify                 (events)
+  Brain → tool.started / tool.finished / agent.state (milestone 5)     (events)
   Body → input.text / voice.control / ui.hotkey / confirm.response / notify.action
          (commands; see bbp_commands.py)
   Brain → desktop.* request → Body → response (corr = request id; 5 s → E_TIMEOUT)
@@ -40,6 +41,7 @@ from websockets.asyncio.server import Server, ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 
 from core_v3.adapters import bbp_protocol as bbp
+from core_v3.adapters.bbp_activity import CHECK_INTERVAL_S, AgentStateThrottle, RunningTools
 from core_v3.events import (
     PRIORITY_IMPORTANT,
     ActionSuggestion,
@@ -50,6 +52,8 @@ from core_v3.events import (
     ReplyDone,
     SpeakRequest,
     TimerFinished,
+    ToolFinished,
+    ToolStarted,
     TranscriptReady,
     VoiceStateChanged,
 )
@@ -145,10 +149,16 @@ class BodyConnection:
 # ── Server ────────────────────────────────────────────────────────────────────
 
 class BBPServer:
-    def __init__(self, config, bus, snapshot_fn: Callable[[], dict[str, Any]]) -> None:
+    def __init__(self, config, bus, snapshot_fn: Callable[[], dict[str, Any]],
+                 agent_fn: Callable[[], dict[str, Any]] | None = None) -> None:
         self._cfg = config
         self._bus = bus
         self._snapshot_fn = snapshot_fn
+        # agent.state (milestone 5): checked every second while a Body is connected.
+        self._agent_fn = agent_fn
+        self._agent_throttle = AgentStateThrottle()
+        self._agent_task: asyncio.Task | None = None
+        self._running_tools = RunningTools()
         self._server: Server | None = None
         self._token = ""
         self._clients: set[BodyConnection] = set()
@@ -169,6 +179,8 @@ class BBPServer:
             (TimerFinished, self._on_timer_finished),
             (ActionSuggestion, self._on_suggestion),
             (SpeakRequest, self._on_speak_request),
+            (ToolStarted, self._on_tool_started),
+            (ToolFinished, self._on_tool_finished),
         ]
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -191,12 +203,18 @@ class BBPServer:
             return False
         for event_type, handler in self._subscriptions:
             self._bus.subscribe(event_type, handler)
+        if self._agent_fn is not None:
+            self._agent_task = asyncio.create_task(self._agent_state_loop())
         log.info("BBP server listening on ws://%s:%d%s", self._cfg.host, self.port, self._cfg.path)
         return True
 
     async def stop(self) -> None:
         for event_type, handler in self._subscriptions:
             self._bus.unsubscribe(event_type, handler)
+        if self._agent_task is not None:
+            self._agent_task.cancel()
+            await asyncio.gather(self._agent_task, return_exceptions=True)
+            self._agent_task = None
         for task in list(self._tasks):
             task.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
@@ -320,6 +338,31 @@ class BBPServer:
         self.broadcast_event("confirm.resolved",
                              {"confirm_id": ev.confirm_id, "approved": ev.approved, "by": ev.by})
 
+    async def _on_tool_started(self, ev: ToolStarted) -> None:
+        self._running_tools.started(ev.call_id, ev.tool, ev.summary)
+        self.broadcast_event("tool.started", {"call_id": ev.call_id, "tool": ev.tool, "summary": ev.summary})
+
+    async def _on_tool_finished(self, ev: ToolFinished) -> None:
+        self._running_tools.finished(ev.call_id)
+        self.broadcast_event("tool.finished", {
+            "call_id": ev.call_id, "ok": ev.status == "ok", "summary": ev.summary, "status": ev.status,
+        })
+
+    async def _agent_state_loop(self) -> None:
+        """Send agent.state when it changes (see AgentStateThrottle)."""
+        loop = asyncio.get_running_loop()
+        while True:
+            await asyncio.sleep(CHECK_INTERVAL_S)
+            if not self._clients:
+                continue
+            try:
+                state = self._agent_fn()
+            except Exception as e:
+                log.debug("agent state unavailable: %s", e)
+                continue
+            if self._agent_throttle.check(state, loop.time()):
+                self.broadcast_event("agent.state", state)
+
     def notify(self, level: str, title: str, body: str = "") -> None:
         """Broadcast a notify event (no buttons in v0.1)."""
         self.broadcast_event("notify", {
@@ -353,16 +396,18 @@ class BBPServer:
 
     def _snapshot(self) -> dict[str, Any]:
         try:
-            return self._snapshot_fn()
+            snapshot = dict(self._snapshot_fn())
         except Exception as e:
             log.error("BBP snapshot failed (%s) — sending an empty one", e)
-            return {
+            snapshot = {
                 "voice": {"state": "idle", "muted": False},
                 "agent": {"mood": "unknown", "intent": "unknown", "model": "unknown",
                           "load": {"ram_pct": None, "vram_pct": None}},
                 "active_goals": [],
                 "pending_confirmations": [],
             }
+        snapshot["running_tools"] = self._running_tools.snapshot()     # milestone 5
+        return snapshot
 
     async def _handle(self, ws: ServerConnection) -> None:
         hello = await self._authenticate(ws)

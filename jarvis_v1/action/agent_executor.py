@@ -18,6 +18,7 @@ import logging
 import re
 import shlex
 import time
+import uuid
 import webbrowser
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
@@ -35,7 +36,7 @@ try:
 except Exception:
     _NVML_OK = False
 
-from action import app_launcher, ui_policy
+from action import app_launcher, tool_activity, ui_policy
 from action.confirmation import ConfirmRequest, describe
 from action.desktop_errors import DesktopError, DesktopUnavailable
 from action.tools.screen_tool import ScreenTool
@@ -213,6 +214,10 @@ class AgentExecutor:
         self._remote = None
         self._desktop_fallback = True
 
+        # Activity reporting (BBP milestone 5); None → nothing reported.
+        self._on_started: tool_activity.StartedCallback | None = None
+        self._on_finished: tool_activity.FinishedCallback | None = None
+
     def attach_remote_desktop(self, remote, *, fallback: bool = True) -> None:
         """Route desktop tools to a connected Body (RemoteDesktop). With
         fallback=False they fail instead of using the Python tools when no
@@ -250,6 +255,21 @@ class AgentExecutor:
         ]
         return sorted(timers, key=lambda t: t["ends_at"])
 
+    def set_activity_callbacks(self, started: tool_activity.StartedCallback | None,
+                               finished: tool_activity.FinishedCallback | None) -> None:
+        """Report every tool call (BBP tool.started / tool.finished): a short
+        summary when it starts, and how it ended (ok, denied, error)."""
+        self._on_started = started
+        self._on_finished = finished
+
+    def _report(self, callback, *args) -> None:
+        if callback is None:
+            return
+        try:
+            callback(*args)
+        except Exception as e:                  # a display must never break a tool
+            log.debug("tool activity callback failed: %s", e)
+
     async def execute(self, plan: list[dict[str, Any]]) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
 
@@ -257,44 +277,55 @@ class AgentExecutor:
             tool: str = str(step.get("tool") or "")
             args: dict[str, Any] = step.get("args") or {}
             log.info("Executing tool: %s | args: %s", tool, args)
-
-            if self._permissions.blocks(tool):
-                reason = f"tool '{tool}' is disabled in config"
-                log.warning("Tool blocked: %s", tool)
-                results.append({
-                    "tool": tool, "status": "denied", "reason": reason,
-                    "denial": PermissionDenial(tool_name=tool, reason=reason),
-                })
-                continue
-
-            if self.config.confirmation_required and self._requires_confirmation(tool, args):
-                confirmed = await self._prompt_confirm(tool, args)
-                if not confirmed:
-                    reason = "user declined confirmation"
-                    results.append({
-                        "tool": tool, "status": "denied", "reason": reason,
-                        "denial": PermissionDenial(tool_name=tool, reason=reason),
-                    })
-                    continue
-
+            call_id = uuid.uuid4().hex[:16]
+            summary = tool_activity.summarize(tool, args)
+            # Before any confirmation, so the HUD shows what is waiting for you.
+            self._report(self._on_started, call_id, tool, summary)
             try:
-                result = await self._dispatch(tool, args)
-                results.append({"tool": tool, "status": "ok", "result": result})
-            except DesktopError as e:
-                if e.code in ("E_NOT_ALLOWED", "E_DENIED"):
-                    log.warning("Tool %s denied: %s", tool, e)
-                    results.append({
-                        "tool": tool, "status": "denied", "reason": str(e), "code": e.code,
-                        "denial": PermissionDenial(tool_name=tool, reason=str(e)),
-                    })
-                else:
-                    log.error("Tool %s failed: %s (%s)", tool, e, e.code)
-                    results.append({"tool": tool, "status": "error", "error": str(e), "code": e.code})
-            except Exception as e:
-                log.error("Tool %s failed: %s", tool, e)
-                results.append({"tool": tool, "status": "error", "error": str(e)})
+                entry = await self._execute_one(tool, args)
+            except asyncio.CancelledError:      # barge-in / cancel: never leave it "running"
+                self._report(self._on_finished, call_id, tool, summary, tool_activity.STATUS_CANCELLED)
+                raise
+            results.append(entry)
+            status = entry["status"] if entry["status"] in (
+                tool_activity.STATUS_OK, tool_activity.STATUS_DENIED) else tool_activity.STATUS_ERROR
+            self._report(self._on_finished, call_id, tool, summary, status)
 
         return results
+
+    async def _execute_one(self, tool: str, args: dict[str, Any]) -> dict[str, Any]:
+        if self._permissions.blocks(tool):
+            reason = f"tool '{tool}' is disabled in config"
+            log.warning("Tool blocked: %s", tool)
+            return {
+                "tool": tool, "status": "denied", "reason": reason,
+                "denial": PermissionDenial(tool_name=tool, reason=reason),
+            }
+
+        if self.config.confirmation_required and self._requires_confirmation(tool, args):
+            confirmed = await self._prompt_confirm(tool, args)
+            if not confirmed:
+                reason = "user declined confirmation"
+                return {
+                    "tool": tool, "status": "denied", "reason": reason,
+                    "denial": PermissionDenial(tool_name=tool, reason=reason),
+                }
+
+        try:
+            result = await self._dispatch(tool, args)
+            return {"tool": tool, "status": "ok", "result": result}
+        except DesktopError as e:
+            if e.code in ("E_NOT_ALLOWED", "E_DENIED"):
+                log.warning("Tool %s denied: %s", tool, e)
+                return {
+                    "tool": tool, "status": "denied", "reason": str(e), "code": e.code,
+                    "denial": PermissionDenial(tool_name=tool, reason=str(e)),
+                }
+            log.error("Tool %s failed: %s (%s)", tool, e, e.code)
+            return {"tool": tool, "status": "error", "error": str(e), "code": e.code}
+        except Exception as e:
+            log.error("Tool %s failed: %s", tool, e)
+            return {"tool": tool, "status": "error", "error": str(e)}
 
     # ── Dispatch ──────────────────────────────────────────────────────────────
 

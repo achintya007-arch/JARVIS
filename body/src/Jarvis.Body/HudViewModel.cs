@@ -18,6 +18,7 @@ public sealed class HudViewModel : INotifyPropertyChanged
     private readonly BodyState _state = new();
     private readonly DispatcherTimer _noticeTimer = new();
     private readonly DispatcherTimer _notificationTimer = new();
+    private readonly DispatcherTimer _activityTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private ConnectionState _connection = ConnectionState.Disconnected;
     private string _statusDetail = "starting";
     private string _notice = "";
@@ -27,6 +28,13 @@ public sealed class HudViewModel : INotifyPropertyChanged
     {
         _noticeTimer.Tick += (_, _) => ClearNotice();
         _notificationTimer.Tick += (_, _) => ClearNotification();
+        _activityTimer.Tick += (_, _) =>
+        {
+            if (_state.Activity.Prune())
+                RaiseActivity();
+            if (_state.Activity.IsEmpty)
+                _activityTimer.Stop();
+        };
     }
 
     /// <summary>A new notify arrived (App also shows it as a Windows notification).</summary>
@@ -44,7 +52,7 @@ public sealed class HudViewModel : INotifyPropertyChanged
 
     public string StatusText => _connection switch
     {
-        ConnectionState.Connected => $"Connected · {_state.Model}",
+        ConnectionState.Connected => AgentStatus.Length > 0 ? $"Connected · {AgentStatus}" : "Connected",
         ConnectionState.Connecting => "Connecting…",
         ConnectionState.AuthFailed => "Auth failed, check token (right-click the tray icon to retry)",
         _ => "Offline · " + (_brainDetail.Length > 0 ? _brainDetail : _statusDetail),
@@ -61,6 +69,34 @@ public sealed class HudViewModel : INotifyPropertyChanged
     }
 
     public bool IsConnected => _connection == ConnectionState.Connected;
+
+    /// <summary>Model and load for the status strip (welcome, then agent.state).</summary>
+    public string AgentStatus => ActivityView.Status(_state.Agent);
+
+    /// <summary>JARVIS has dropped to its lighter model: the strip shows a "fallback" badge.</summary>
+    public bool IsFallback => IsConnected && _state.Agent?.Fallback == true;
+
+    /// <summary>What JARVIS is doing right now: one line per tool call (amendment 23).</summary>
+    // Rebuilt only when the lines change, so other updates don't
+    // make WPF regenerate the list.
+    public IReadOnlyList<ActivityLineView> Activity
+    {
+        get
+        {
+            var version = IsConnected ? _state.Activity.Version : -1;
+            if (version != _activityVersion)
+            {
+                _activityVersion = version;
+                _activity = IsConnected ? _state.Activity.Lines.Select(ActivityView.For).ToList() : [];
+            }
+            return _activity;
+        }
+    }
+
+    private IReadOnlyList<ActivityLineView> _activity = [];
+    private int _activityVersion = -1;
+
+    public bool HasActivity => Activity.Count > 0;
 
     public bool Muted => IsConnected && _state.Muted;
 
@@ -89,12 +125,15 @@ public sealed class HudViewModel : INotifyPropertyChanged
     {
         _connection = state;
         _statusDetail = detail;
+        if (state != ConnectionState.Connected)
+            _state.Activity.Clear();        // the next welcome says what is still running
         RaiseAll();
     }
 
     public void OnWelcome(WelcomePayload welcome)
     {
         _state.ApplyWelcome(welcome);
+        WatchActivity();
         RaiseAll();
     }
 
@@ -110,6 +149,7 @@ public sealed class HudViewModel : INotifyPropertyChanged
             _notificationTimer.Start();
             NotificationArrived?.Invoke(note);
         }
+        WatchActivity();
         RaiseAll();
     }
 
@@ -152,6 +192,18 @@ public sealed class HudViewModel : INotifyPropertyChanged
         _noticeTimer.Stop();
         _notice = "";
         Raise(nameof(Notice));
+    }
+
+    private void WatchActivity()
+    {
+        if (!_state.Activity.IsEmpty && !_activityTimer.IsEnabled)
+            _activityTimer.Start();
+    }
+
+    private void RaiseActivity()
+    {
+        Raise(nameof(Activity));
+        Raise(nameof(HasActivity));
     }
 
     private void RaiseAll() => Raise(string.Empty);     // "" = every property changed

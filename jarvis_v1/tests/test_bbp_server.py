@@ -130,7 +130,7 @@ class TestSession:
         async with ws:
             p = welcome["payload"]
             assert p["brain_version"] == "3.0" and p["session"]
-            assert p["snapshot"] == SNAPSHOT
+            assert p["snapshot"] == {**SNAPSHOT, "running_tools": []}
 
     async def test_snapshot_failure_sends_empty_snapshot(self, tmp_path):
         def boom():

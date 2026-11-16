@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/bbp/v1/topics/tool.finished.schema.json",
+  "title": "tool.finished (event, Brain -> Body) payload",
+  "description": "Amendment 23: a tool call ended. ok is true only for status ok. status tells a decline (denied: you said no, or it isn't allowed) or a stopped turn (cancelled) from a failure (error).",
+  "type": "object",
+  "required": ["call_id", "ok", "summary"],
+  "properties": {
+    "call_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "ok": { "type": "boolean" },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "status": { "enum": ["ok", "denied", "error", "cancelled"] }
+  },
+  "additionalProperties": true
+}

@@ -70,7 +70,7 @@ public class BodyStateTests
         var s = new BodyState();
         Assert.True(s.Apply(Ev("voice.state", new VoiceStatePayload("speaking", false))));
         Assert.Equal("speaking", s.VoiceState);
-        Assert.False(s.Apply(Ev("agent.state", new { mood = "x" })));
+        Assert.False(s.Apply(Ev("sentinel.finding", new { kind = "x" })));      // reserved for v0.2
     }
 }
 

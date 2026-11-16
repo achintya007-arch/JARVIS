@@ -128,3 +128,26 @@ class TimerFinished:
     """A set_timer timer went off (AgentExecutor). -> BBP notify "Timer"."""
     label:    str
     priority: int = PRIORITY_NORMAL
+
+
+# ── Tool activity (BBP milestone 5) ──────────────────────────────────────────
+
+@dataclass
+class ToolStarted:
+    """AgentExecutor began a tool call. -> BBP tool.started. `summary` is the
+    templated line from action/tool_activity.py (never the tool's contents)."""
+    call_id:  str
+    tool:     str
+    summary:  str
+    priority: int = PRIORITY_NORMAL
+
+
+@dataclass
+class ToolFinished:
+    """A tool call ended. -> BBP tool.finished. status: ok, denied (you
+    declined, or not allowed), error, or cancelled (the turn was stopped)."""
+    call_id:  str
+    tool:     str
+    summary:  str
+    status:   str
+    priority: int = PRIORITY_NORMAL

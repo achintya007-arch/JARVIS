@@ -157,6 +157,14 @@ Gated actions: `write_file`, `run_shell` (if enabled), `close_app`, `close_windo
 - [ ] "click sevn in calculator" → "did you mean 'Seven'?", nothing pressed
 - [ ] In a **new, empty** Notepad tab, ask JARVIS to type a line into Notepad's 'Text editor' → dialog shows it; Approve → it's there. In a tab that already has text → refused, nothing replaced
 
+### Live activity on the HUD (needs the Body)
+- [ ] "open calculator" → the HUD shows "• Opening Calculator…" (may be too quick to see), then "✓ Opening Calculator" for 2 s
+- [ ] "click delete in calculator" → while the dialog is open the HUD shows "• Pressing 'delete' in Calculator…"; Deny → it turns grey, "· declined", and clears after 2 s
+- [ ] The status line shows the model and RAM (and VRAM if there's an NVIDIA GPU); RAM updates only after a 5-point move
+- [ ] Under heavy memory load JARVIS switches to the compact model → the status line names it and an amber **fallback** badge appears; it goes when the load drops and the main model is back
+- [ ] Start a slow tool (e.g. "search the web for …"), quit the Body from the tray and start it again from the shortcut before it finishes → the line is back
+- [ ] Nothing typed, no shell command and no search query ever appears in an activity line
+
 ### Voice
 - [ ] Delivery sounds composed (the -4% cadence); voice is the deep neural one
 
@@ -182,6 +190,7 @@ Gated actions: `write_file`, `run_shell` (if enabled), `close_app`, `close_windo
 - [x] Brain–Body Protocol milestones 1–2: HUD, typed input, push-to-talk, tray
 - [x] BBP milestone 3: notifications and confirmations (dialog, voice, console; fail closed)
 - [x] BBP milestone 4: clicking and typing in apps through UI Automation, approvals bound to the request
+- [x] BBP milestone 5: live activity on the HUD (every tool call, declined/failed shown apart) and the model/fallback status strip
 - [x] Safe desktop control through the Body (launch, focus, list, volume, `uia.read`)
 - [x] One-click start: the Body launches and watches Ollama, the Brain and PhoneBox; `install.ps1`
 

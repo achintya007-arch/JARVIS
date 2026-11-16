@@ -50,6 +50,7 @@ body/
 │   ├── BbpClient.cs       #   hello/welcome, ping, close-code handling, commands
 │   ├── ReconnectPolicy.cs #   0.5 s, 1 s, 2 s, then every 5 s
 │   ├── BodyState.cs       #   what the HUD shows, built from events
+│   ├── ToolActivity.cs    #   the activity lines (tool.started / tool.finished)
 │   ├── ConfirmationTracker.cs # which confirmation dialogs are open, and why they close
 │   ├── ApprovalLedger.cs  #   what you approved, so clicks/typing need that exact approval
 │   ├── TokenLocator.cs    #   finds jarvis_v1/data/bbp_token
@@ -249,6 +250,31 @@ How the Body reacts to each close code:
 | 4401 | Bad or missing token | Stop retrying until the token file changes or you choose **Reconnect** in the tray |
 | 4408 | Idle timeout | Reconnect immediately, then normal backoff |
 | Anything else / network drop | Unexpected | Reconnect with normal backoff |
+
+## What JARVIS is doing
+
+Under the status line the HUD lists each tool call while it runs (BBP
+amendment 23), one line per call:
+
+| Line | Meaning |
+| --- | --- |
+| • Opening Calculator… | Running (shown from the moment the call starts, also while a confirmation waits) |
+| ✓ Opening Calculator | Done; stays 2 s |
+| – Pressing 'Delete' in Calculator · declined (grey) | You said no, or it wasn't allowed; stays 2 s |
+| – … · stopped (grey) | The turn was stopped while it ran |
+| ✗ … · failed (red) | It failed; stays 2 s |
+
+A line that never gets a result clears itself after 30 s. The lines are short
+templates: they name the app, the button, or a file's name, never what is typed,
+the shell command, a file's contents or a search query. If the Body restarts or
+reconnects mid-call, the Brain's welcome lists what is still running and the
+lines come back.
+
+The status line shows the model JARVIS is using and the RAM / VRAM load
+(`Connected · qwen2.5:7b-instruct · RAM 62% · VRAM 48%`). A model, mood or
+intent change shows at once; load updates at most every 5 s and only when it
+moves by 5 points or more. When JARVIS drops to its lighter model under memory
+pressure, an amber **fallback** badge appears next to it.
 
 ## Confirmations and notifications
 

@@ -8,6 +8,8 @@ public sealed class BodyState
 {
     private readonly SortedDictionary<int, string> _chunks = new();
 
+    public BodyState(Func<DateTime>? clock = null) => Activity = new ToolActivity(clock);
+
     public string VoiceState { get; private set; } = "idle";
     public bool Muted { get; private set; }
     public string Transcript { get; private set; } = "";
@@ -18,7 +20,13 @@ public sealed class BodyState
     public string? TurnId { get; private set; }
     public bool ReplyDone { get; private set; }
     public bool ReplyInterrupted { get; private set; }
-    public string Model { get; private set; } = "";
+    public string Model => Agent?.Model ?? "";
+
+    /// <summary>Model, fallback flag, mood, intent and load (welcome, then agent.state).</summary>
+    public AgentSnapshot? Agent { get; private set; }
+
+    /// <summary>The tool calls on the HUD (tool.started / tool.finished).</summary>
+    public ToolActivity Activity { get; }
 
     /// <summary>The latest notify (reminder, timer, alert…): shown on screen, never spoken.</summary>
     public NotifyPayload? LastNotification { get; private set; }
@@ -30,7 +38,8 @@ public sealed class BodyState
     {
         VoiceState = welcome.Snapshot.Voice.State;
         Muted = welcome.Snapshot.Voice.Muted;
-        Model = welcome.Snapshot.Agent.Model;
+        Agent = welcome.Snapshot.Agent;
+        Activity.Restore(welcome.Snapshot.RunningTools);
     }
 
     /// <summary>Apply one event; returns false for topics the HUD doesn't show.</summary>
@@ -69,6 +78,18 @@ public sealed class BodyState
 
             case Topics.Notify:
                 LastNotification = message.PayloadAs<NotifyPayload>();
+                return true;
+
+            case Topics.ToolStarted:
+                Activity.Started(message.PayloadAs<ToolStartedPayload>());
+                return true;
+
+            case Topics.ToolFinished:
+                Activity.Finished(message.PayloadAs<ToolFinishedPayload>());
+                return true;
+
+            case Topics.AgentState:
+                Agent = message.PayloadAs<AgentSnapshot>();
                 return true;
 
             default:

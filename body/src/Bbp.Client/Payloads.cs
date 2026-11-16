@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Bbp.Client;
 
 // Typed payloads for the milestone-1 topics. Field names map to the schema's
@@ -12,9 +14,16 @@ public sealed record Snapshot(
     VoiceStatePayload Voice,
     AgentSnapshot Agent,
     IReadOnlyList<GoalSnapshot> ActiveGoals,
-    IReadOnlyList<PendingConfirmation> PendingConfirmations);
+    IReadOnlyList<PendingConfirmation> PendingConfirmations,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<RunningTool>? RunningTools = null);
 
-public sealed record AgentSnapshot(string Mood, string Intent, string Model, LoadSnapshot Load);
+/// <summary>The agent status, in the welcome snapshot and as the agent.state
+/// event (milestone 5). Fallback: JARVIS has dropped to its lighter model.</summary>
+public sealed record AgentSnapshot(string Mood, string Intent, string Model, LoadSnapshot Load, bool Fallback = false);
+
+/// <summary>A tool call still running when the welcome was sent (amendment 23).</summary>
+public sealed record RunningTool(string CallId, string Tool, string Summary, double ElapsedS = 0);
 
 public sealed record LoadSnapshot(double? RamPct, double? VramPct);
 
@@ -59,6 +68,15 @@ public sealed record NotifyActionPayload(string NotifyId, string Action);
 
 public sealed record ErrorPayload(bool Ok, ErrorInfo Error);
 
+// Milestone 5: live activity (amendment 23)
+
+public sealed record ToolStartedPayload(string CallId, string Tool, string Summary);
+
+/// <summary>status: ok, denied, error, cancelled; absent from an older Brain.</summary>
+public sealed record ToolFinishedPayload(
+    string CallId, bool Ok, string Summary,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Status = null);
+
 public static class Topics
 {
     public const string VoiceState = "voice.state";
@@ -74,4 +92,7 @@ public static class Topics
     public const string ConfirmRequest = "confirm.request";
     public const string ConfirmResolved = "confirm.resolved";
     public const string ConfirmResponse = "confirm.response";
+    public const string ToolStarted = "tool.started";
+    public const string ToolFinished = "tool.finished";
+    public const string AgentState = "agent.state";
 }
