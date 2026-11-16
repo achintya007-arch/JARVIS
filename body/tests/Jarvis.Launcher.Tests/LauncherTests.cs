@@ -179,14 +179,10 @@ public sealed class LauncherTests : IDisposable
         Assert.Equal(BrainStatus.Running, rig.L.State.Status);
 
         var brain = rig.Brain;
-        var order = new List<string>();
-        _ = brain.Exited.ContinueWith(_ => { lock (order) order.Add("brain"); }, TaskScheduler.Default);
-        _ = serve.Exited.ContinueWith(_ => { lock (order) order.Add("ollama"); }, TaskScheduler.Default);
         await rig.L.ShutdownAsync();
         Assert.False(brain.Killed);                                 // asked, not killed
         Assert.True(serve.Killed);                                  // ours, so stopped
-        await Until(() => order.Count == 2, "both stopped");
-        Assert.Equal(["brain", "ollama"], order);
+        Assert.Equal([brain, serve], rig.Host.ExitOrder);           // the Brain first
     }
 
     [Fact]

@@ -33,7 +33,15 @@ internal sealed class FakeChild(int id, ProcessSpec spec) : IChildProcess
         Exit(-1);
     }
 
-    public void Exit(int code) => _exit.TrySetResult(code);
+    /// <summary>Called as it exits (before anything awaiting it runs).</summary>
+    public Action<FakeChild>? Exiting { get; set; }
+
+    public void Exit(int code)
+    {
+        if (!_exit.Task.IsCompleted)
+            Exiting?.Invoke(this);
+        _exit.TrySetResult(code);
+    }
 }
 
 internal sealed class FakeHost : IProcessHost
@@ -41,6 +49,9 @@ internal sealed class FakeHost : IProcessHost
     private int _pid = 1000;
 
     public ConcurrentQueue<FakeChild> Started { get; } = new();
+
+    /// <summary>Children in the order they exited.</summary>
+    public ConcurrentQueue<FakeChild> ExitOrder { get; } = new();
     public List<ProcessSpec> Runs { get; } = [];
     public HashSet<string> Files { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> OnPath { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -61,6 +72,7 @@ internal sealed class FakeHost : IProcessHost
     public IChildProcess Start(ProcessSpec spec)
     {
         var child = new FakeChild(Interlocked.Increment(ref _pid), spec);
+        child.Exiting = ExitOrder.Enqueue;
         Started.Enqueue(child);
         OnStart?.Invoke(child);
         return child;
