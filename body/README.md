@@ -16,8 +16,18 @@ depends on it: voice and text mode work the same with or without a Body attached
 - **Push-to-talk:** Ctrl+Alt+J (configurable) works anywhere in Windows, like
   saying "hey jarvis". It's a tap, not a hold: JARVIS listens until you stop
   talking. Pressed while JARVIS is speaking, it interrupts him and listens.
-- **Tray icon:** shows the state at a glance. Right-click it to mute or unmute
-  the microphone, show or hide the HUD, reconnect, or quit.
+- **Launcher:** starts the whole system. If no Brain is running, the Body checks
+  Ollama and the models, starts Ollama if needed, and starts the Brain hidden.
+  It restarts the Brain if it crashes, and on Quit stops only what it started.
+  See [Starting JARVIS from the Body](#starting-jarvis-from-the-body).
+- **Tray icon:** shows the state at a glance. Right-click it to:
+  - mute or unmute the microphone;
+  - show or hide the HUD;
+  - reconnect;
+  - restart the Brain;
+  - open the logs folder;
+  - turn Start with Windows on or off;
+  - quit.
 - **Desktop control:** when JARVIS opens an app, switches to a window, lists
   windows, sets the volume, reads what's on screen, presses a button or fills a
   field, it asks the Body, which does it with native Windows APIs. See
@@ -55,6 +65,13 @@ body/
 │   ├── UiaActor.cs        #   UI Automation patterns: press, toggle, select, set text
 │   ├── UiMatcher.cs       #   which element you meant ("7" = Seven), "did you mean"
 │   └── RiskyNames.cs      #   "send", "delete", … (protocol/policy/risky-words.json)
+├── src/Jarvis.Launcher/   # starts and watches the Brain, Ollama, PhoneBox (no UI)
+│   ├── Launcher.cs        #   attach or start, preflight, restarts, clean quit
+│   ├── ProcessHost.cs     #   hidden processes, rotating logs, a kill-on-close job
+│   ├── RestartPolicy.cs   #   3 restarts in 5 minutes, waits 2 s / 5 s / 15 s
+│   ├── BrainConfigInfo.cs #   what `python -m tools.preflight` reports
+│   ├── RotatingLog.cs     #   brain.log etc., rotated at 5 MB, 3 kept
+│   └── StartupEntry.cs    #   Start with Windows (HKCU Run key)
 ├── src/Jarvis.Body/       # WPF HUD (UI only)
 │   ├── desktop.allowlist.json # apps the Body may launch, focus or read
 │   ├── MainWindow.xaml    #   the HUD (with the notification card)
@@ -62,10 +79,14 @@ body/
 │   ├── NotificationView.cs#   how long each notify level shows, tray icon per level
 │   ├── TrayIcon.cs        #   notification-area icon and menu
 │   ├── GlobalHotkey.cs    #   RegisterHotKey + "Ctrl+Alt+J" parsing
+│   ├── BrainView.cs       #   the Brain's state as the tray and HUD show it
+│   ├── jarvis.ico         #   app icon (made by tools/make-icon.ps1)
 │   └── BodyLog.cs         #   %LOCALAPPDATA%\JARVIS\body.log
 └── tests/
     ├── Bbp.Client.Tests   # envelope, schemas, backoff, close codes, commands, requests, HUD state, confirmations
-    ├── Jarvis.Body.Tests  # hotkey parsing and conflicts, tray status, dialog rules
+    ├── Jarvis.Body.Tests  # hotkey parsing and conflicts, tray status, dialog rules, settings
+    ├── Jarvis.Launcher.Tests # attach vs start, preflight failures, restart backoff,
+    │                         # what quit stops (fake processes), real hidden processes
     └── Jarvis.Desktop.Tests # allowlist, UI-tree trimming, desktop request handlers,
                              # clicking/typing rules, real UIA on a test window of its own
 ```
@@ -86,6 +107,11 @@ dotnet test
 dotnet run --project src/Jarvis.Body
 ```
 
+To use it as an app, run `install.ps1` from the repo root instead; see
+[Starting JARVIS from the Body](#starting-jarvis-from-the-body). For
+development, `dotnet run` starts the Brain the same way (it finds `jarvis_v1`
+from its own folder). To attach to a Brain you run yourself instead:
+
 1. Enable the server on the Brain side. In `jarvis_v1/config.yaml`:
 
    ```yaml
@@ -100,7 +126,8 @@ dotnet run --project src/Jarvis.Body
    it keeps retrying until the Brain is up.
 
 Drag the HUD to move it. Right-click it to hide it or quit. Double-click the
-tray icon to bring it back.
+tray icon to bring it back. Starting the Body again (the shortcut, say) just
+shows the HUD of the one already running.
 
 In text mode (`.\run.ps1 -Text`) there is no microphone, so mute and
 push-to-talk are refused with a short notice on the HUD; typing works.
@@ -114,9 +141,30 @@ Copy `body.settings.example.json` to `body.settings.json` next to
 {
   "url": "ws://127.0.0.1:8765/bbp",
   "token_path": "C:/path/to/jarvis_v1/data/bbp_token",
-  "hotkey": "Ctrl+Alt+J"
+  "hotkey": "Ctrl+Alt+J",
+  "jarvis_root": "C:/path/to/JARVIS/jarvis_v1",
+  "python_path": null,
+  "brain_mode": "wake",
+  "autostart_brain": true,
+  "ollama_path": null,
+  "phonebox_path": null
 }
 ```
+
+The launcher keys:
+
+- `jarvis_root`: the `jarvis_v1` folder. `install.ps1` sets it. A Body run
+  from inside the repo finds it itself. Otherwise the Body asks once with a
+  folder picker and saves it.
+- `python_path`: by default, `jarvis_root\venv\Scripts\python.exe`.
+- `brain_mode`: `wake` (voice) or `text` (type in the HUD).
+- `autostart_brain`: `false` makes the Body only connect, never start anything.
+  Restart brain in the tray still starts one.
+- `ollama_path`: by default, `ollama` from PATH or the standard install.
+- `phonebox_path`: by default, `%LOCALAPPDATA%\PhoneBox\app\PhoneBoxAgent.exe`.
+
+The Brain's port comes from `url`. The token is read from
+`jarvis_root\data\bbp_token` when `token_path` isn't set.
 
 `hotkey` takes Ctrl, Alt, Shift and Win plus one key (A–Z, 0–9, F1–F24 or
 Space), and needs at least one of Ctrl, Alt or Win. If another app already owns
@@ -125,6 +173,64 @@ runs without push-to-talk. The `JARVIS_BBP_TOKEN_PATH` environment variable
 also sets the token path.
 
 The log is at `%LOCALAPPDATA%\JARVIS\body.log`.
+
+## Starting JARVIS from the Body
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 [-StartWithWindows] [-Launch]
+```
+
+`install.ps1` (repo root) publishes the Body as one framework-dependent exe, a
+couple of MB, needing the .NET 8+ Desktop Runtime. It goes to
+`%LOCALAPPDATA%\Programs\JARVIS`. The script also:
+
+- writes `jarvis_root`;
+- creates **JARVIS** shortcuts in the Start Menu and on the Desktop;
+- with `-StartWithWindows`, adds the HKCU Run entry (no admin rights needed).
+
+If the installed Body is running, it is asked to quit first. `uninstall.ps1`
+removes the shortcuts and the startup entry; add `-RemoveFiles` to delete the
+app as well.
+
+When the Body starts:
+
+1. **A Brain is already listening on the port** (you started one by hand): the
+   Body uses it and never stops it. Restart brain only says so.
+2. **Otherwise it runs a preflight:** `python -m tools.preflight` reads
+   `config.yaml` and reports the models, the Ollama URL and PhoneBox. Then:
+   - **Ollama.** If it isn't answering, the Body starts `ollama serve` (when
+     it's installed and the URL is local) and waits up to 20 s for it.
+   - **Models.** If a required model (the main LLM or the embedding model) is
+     missing, the Body stops there. It shows the `ollama pull` commands as a
+     notice on the HUD and a Windows notification. A missing fallback model is
+     only a warning.
+   - **PhoneBox.** If `config.yaml` enables it and it isn't running, the Body
+     starts it.
+3. **The Brain starts** hidden, with `JARVIS_MANAGED=1`:
+   - BBP is on, on the Body's port, whatever `config.yaml` says.
+   - Its stdin is the Body's control pipe.
+   - Its output goes to `%LOCALAPPDATA%\JARVIS\brain.log`.
+
+**While it runs:** the tray menu shows the Brain's state, and so does the HUD
+while it's offline. If the Brain stops unexpectedly, the Body restarts it after
+2 s, then 5 s, then 15 s. A 4th crash within 5 minutes leaves it stopped, with
+an alert. Restart brain starts it again.
+
+**Quit** (tray, HUD menu, or `Jarvis.Body.exe --quit`):
+
+1. The Body sends the Brain `shutdown` and waits up to 5 s for BBP to close
+   with 1000.
+2. It waits up to 5 s more for the process to exit, and kills it only if it
+   hasn't.
+3. It then stops PhoneBox and Ollama, but only if it started them.
+
+**If the Body itself crashes:**
+
+- The Brain sees its stdin close and shuts down cleanly on its own.
+- Ollama and PhoneBox, when the Body started them, are in a Windows job object,
+  so Windows ends them too.
+
+An Ollama, PhoneBox or Brain you started yourself is never stopped.
 
 ## Status at a glance
 

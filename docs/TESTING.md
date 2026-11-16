@@ -77,6 +77,18 @@ notes, goals, volume) — but LLM replies and semantic recall are disabled.
 - [ ] Greeting is spoken (time + CPU/RAM). Says "Vault memory is online" once `nomic-embed-text` is pulled.
 - [ ] `Ctrl+C` shuts down cleanly ("Brain V3 shutdown complete." in the log).
 
+### One-click start (installed Body; `install.ps1`)
+Logs: `%LOCALAPPDATA%\JARVIS\body.log`, `brain.log`, `ollama.log`.
+- [ ] Nothing running, double-click **JARVIS** → Ollama starts, then the Brain, HUD shows "Connected" (about 25 s)
+- [ ] Double-click it again → no second Body; the HUD comes to the front
+- [ ] Kill the Brain's `python.exe` → tray/HUD say it stopped, it restarts (2 s, then 5 s, 15 s); a 4th crash in 5 min → "JARVIS keeps stopping"
+- [ ] Tray → Quit → `brain.log` ends "Brain V3 shutdown complete.", `body.log` says "shut down cleanly (BBP closed 1000)"; no `python -m core_v3` or `ollama` left
+- [ ] Start Ollama yourself first, then JARVIS, then Quit → your Ollama still runs
+- [ ] Start a Brain yourself (`.\run.ps1`), then JARVIS → tray says "started by hand"; Quit leaves it running
+- [ ] Stop Ollama and make it unstartable (rename `ollama_path`) → a "JARVIS didn't start" notice, no Brain
+- [ ] End `Jarvis.Body.exe` in Task Manager → the Brain stops itself within seconds, and an Ollama it started goes too
+- [ ] Tray → Start with Windows → `HKCU\...\Run\JARVIS` appears; untick → gone
+
 ### Fast routing (works without Ollama)
 - [ ] "what time is it" → speaks the time
 - [ ] "set a timer for 1 hour 30 minutes" → confirms **1h 30m** (not 3600s)
@@ -171,6 +183,7 @@ Gated actions: `write_file`, `run_shell` (if enabled), `close_app`, `close_windo
 - [x] BBP milestone 3: notifications and confirmations (dialog, voice, console; fail closed)
 - [x] BBP milestone 4: clicking and typing in apps through UI Automation, approvals bound to the request
 - [x] Safe desktop control through the Body (launch, focus, list, volume, `uia.read`)
+- [x] One-click start: the Body launches and watches Ollama, the Brain and PhoneBox; `install.ps1`
 
 ### Next up
 - [ ] **Phase G — coding partner** (the big "code my stuff" capability)

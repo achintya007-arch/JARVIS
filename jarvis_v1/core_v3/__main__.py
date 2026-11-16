@@ -2,6 +2,7 @@
 core_v3 entry point.
 
 Run with: python -m core_v3
+Under the Body launcher (JARVIS_MANAGED=1) see core_v3/managed.py.
 """
 
 import asyncio
@@ -15,6 +16,7 @@ if sys.platform == "win32":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from core.config import Config
+from core_v3 import managed
 from core_v3.brain import Brain
 
 logging.basicConfig(
@@ -26,6 +28,11 @@ log = logging.getLogger("jarvis.v3")
 
 async def main() -> None:
     config = Config.load(Path("config.yaml"))
+    if managed.is_managed():
+        managed.apply(config)
+        task = asyncio.current_task()
+        managed.watch_stdin(asyncio.get_running_loop(), task.cancel)
+        log.info("Managed by the JARVIS launcher (BBP port %d, mode %s).", config.bbp.port, config.mode)
     log.info("JARVIS V3 starting (vault-centric brain)...")
     await Brain(config).start()
 
@@ -33,5 +40,5 @@ async def main() -> None:
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
         log.info("JARVIS V3 stopped.")

@@ -34,7 +34,8 @@ public static class TrayVisual
 /// <summary>
 /// Notification-area icon: a coloured dot for the connection (green connected,
 /// amber with a slash when muted, grey offline, red auth failed) and a menu
-/// for mute/unmute, show/hide HUD, reconnect and quit.
+/// for mute/unmute, show/hide HUD, reconnect, the Brain (status, restart,
+/// logs), Start with Windows and quit.
 /// </summary>
 public sealed class TrayIcon : IDisposable
 {
@@ -43,8 +44,13 @@ public sealed class TrayIcon : IDisposable
     private readonly Forms.ToolStripMenuItem _mute;
     private readonly Forms.ToolStripMenuItem _showHide;
     private readonly Forms.ToolStripMenuItem _reconnect;
+    private readonly Forms.ToolStripMenuItem _brain;
+    private readonly Forms.ToolStripMenuItem _restartBrain;
+    private readonly Forms.ToolStripMenuItem _startWithWindows;
+    private readonly Forms.ToolStripMenuItem _quit;
     private readonly Dictionary<TrayStatus, Drawing.Icon> _icons;
     private bool _muted;
+    private bool _startOn;
 
     public TrayIcon()
     {
@@ -53,11 +59,17 @@ public sealed class TrayIcon : IDisposable
         _mute = new Forms.ToolStripMenuItem("Mute microphone", null, (_, _) => MuteToggled?.Invoke(!_muted));
         _showHide = new Forms.ToolStripMenuItem("Hide HUD", null, (_, _) => ShowHideRequested?.Invoke());
         _reconnect = new Forms.ToolStripMenuItem("Reconnect", null, (_, _) => ReconnectRequested?.Invoke());
-        var quit = new Forms.ToolStripMenuItem("Quit", null, (_, _) => QuitRequested?.Invoke());
+        _brain = new Forms.ToolStripMenuItem("Brain: not started") { Enabled = false };
+        _restartBrain = new Forms.ToolStripMenuItem("Restart brain", null, (_, _) => RestartBrainRequested?.Invoke());
+        var logs = new Forms.ToolStripMenuItem("Open logs folder", null, (_, _) => OpenLogsRequested?.Invoke());
+        _startWithWindows = new Forms.ToolStripMenuItem("Start with Windows", null,
+            (_, _) => StartWithWindowsToggled?.Invoke(!_startOn));
+        _quit = new Forms.ToolStripMenuItem("Quit", null, (_, _) => QuitRequested?.Invoke());
 
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.AddRange([_header, new Forms.ToolStripSeparator(), _mute, _showHide, _reconnect,
-                             new Forms.ToolStripSeparator(), quit]);
+        menu.Items.AddRange([_header, _brain, new Forms.ToolStripSeparator(), _mute, _showHide, _reconnect,
+                             new Forms.ToolStripSeparator(), _restartBrain, logs, _startWithWindows,
+                             new Forms.ToolStripSeparator(), _quit]);
         _icon = new Forms.NotifyIcon { ContextMenuStrip = menu, Visible = true };
         _icon.DoubleClick += (_, _) => ShowHideRequested?.Invoke();
         Update(TrayStatus.Offline, hudVisible: true);
@@ -68,6 +80,27 @@ public sealed class TrayIcon : IDisposable
     public event Action? ShowHideRequested;
     public event Action? ReconnectRequested;
     public event Action? QuitRequested;
+    public event Action? RestartBrainRequested;
+    public event Action? OpenLogsRequested;
+
+    /// <summary>true = turn on.</summary>
+    public event Action<bool>? StartWithWindowsToggled;
+
+    public void SetBrain(string line, bool canRestart)
+    {
+        _brain.Text = line;
+        _restartBrain.Enabled = canRestart;
+    }
+
+    public void SetStartWithWindows(bool on) => _startWithWindows.Checked = _startOn = on;
+
+    /// <summary>Quit is running: nothing else in the menu makes sense now.</summary>
+    public void SetQuitting()
+    {
+        _brain.Text = "Brain: stopping…";
+        foreach (Forms.ToolStripItem item in _icon.ContextMenuStrip!.Items)
+            item.Enabled = false;
+    }
 
     public void Update(TrayStatus status, bool hudVisible)
     {

@@ -47,8 +47,18 @@ public sealed class HudViewModel : INotifyPropertyChanged
         ConnectionState.Connected => $"Connected · {_state.Model}",
         ConnectionState.Connecting => "Connecting…",
         ConnectionState.AuthFailed => "Auth failed, check token (right-click the tray icon to retry)",
-        _ => "Offline · " + _statusDetail,
+        _ => "Offline · " + (_brainDetail.Length > 0 ? _brainDetail : _statusDetail),
     };
+
+    private string _brainDetail = "";
+
+    /// <summary>The launcher's view of the Brain (starting, restarting, failed…),
+    /// shown instead of the reconnect detail while offline.</summary>
+    public void OnBrain(Jarvis.Launcher.LauncherState state)
+    {
+        _brainDetail = BrainView.HudDetail(state);
+        Raise(nameof(StatusText));
+    }
 
     public bool IsConnected => _connection == ConnectionState.Connected;
 

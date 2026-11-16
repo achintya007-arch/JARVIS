@@ -9,7 +9,18 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Jarvis.Body</AssemblyName>
     <RootNamespace>Jarvis.Body</RootNamespace>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
+    <!-- Made by body/tools/make-icon.ps1 (exe, shortcuts, windows). -->
+    <ApplicationIcon>jarvis.ico</ApplicationIcon>
+    <Product>JARVIS</Product>
+  </PropertyGroup>
+  <!-- install.ps1 publishes one framework-dependent exe (needs the .NET 8+
+       Desktop Runtime; a few MB instead of ~150 MB self-contained). -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
   <ItemGroup>
     <!-- WinForms/System.Drawing names clash with WPF ones (Application,
@@ -23,6 +34,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Bbp.Client\Bbp.Client.csproj" />
     <ProjectReference Include="..\Jarvis.Desktop\Jarvis.Desktop.csproj" />
+    <ProjectReference Include="..\Jarvis.Launcher\Jarvis.Launcher.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="body.settings.example.json" CopyToOutputDirectory="PreserveNewest" />

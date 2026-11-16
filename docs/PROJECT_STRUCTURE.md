@@ -40,6 +40,8 @@ jarvis_v1/
 │   │                       #   to approve a gated action; fail closed (BBP confirm.*)
 │   ├── console.py          # ConsoleInput: text-mode stdin shared by chat + confirmations
 │   │                       #   (clean cognition boundary; no audio)
+│   ├── managed.py          # Started by the Body (JARVIS_MANAGED=1): BBP forced on, the
+│   │                       #   launcher's stdin pipe stops it cleanly ("shutdown" / EOF)
 │   ├── voice/              # Voice state machine + orchestration
 │   │   ├── state.py        #   VoiceState / VoiceStateManager
 │   │   ├── orchestrator.py #   VoiceOrchestrator (IDLE→LISTEN→PROCESS→SPEAK)
@@ -124,6 +126,7 @@ jarvis_v1/
 │   ├── test_confirmations.py   # confirmation broker, console, confirm.* + notify over BBP
 │   ├── test_ui_actions.py      # click_element / set_element_text, approvals, risky words
 │   ├── test_remote_desktop.py  # desktop requests, routing, fallback, read_screen_ui
+│   ├── test_managed.py         # under the Body launcher: env, stdin control pipe, preflight
 │   └── test_phase_f.py
 │
 └── tools/                  # Diagnostics (launched via run.ps1 flags)
@@ -133,11 +136,14 @@ jarvis_v1/
     ├── voice_test.py       # -VoiceTest: TTS voice/rate/pitch A/B tester
     ├── bbp_probe.py        # fake Body: prints every BBP event (python -m tools.bbp_probe)
     ├── desktop_bench.py    # desktop-tool success rate + latency against real apps
-    └── desktop_bench_body.py # the bench's Body backend (--backend body)
+    ├── desktop_bench_body.py # the bench's Body backend (--backend body)
+    └── preflight.py        # one JSON line for the Body launcher: models, Ollama URL,
+                            #   PhoneBox, warnings (python -m tools.preflight)
 ```
 
 Outside `jarvis_v1/`: [`protocol/`](../protocol/) (BBP JSON Schemas and the
-risky-word list in `policy/`, shared by Brain and Body), [`body/`](../body/) (C# Windows HUD) and [`docs/`](./) (these
+risky-word list in `policy/`, shared by Brain and Body), [`body/`](../body/) (C# Windows HUD and launcher),
+`install.ps1` / `uninstall.ps1` (install the Body as an app with shortcuts) and [`docs/`](./) (these
 documents, including the [BBP spec](protocol/BBP_v0.1.md)).
 
 ## Known gaps

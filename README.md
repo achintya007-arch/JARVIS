@@ -148,7 +148,53 @@ package or the model file is missing, JARVIS automatically falls back to
 edge-tts** — so it still speaks out of the box with no extra setup. To force the
 cloud backend, set `tts.engine: "edge"`.
 
-### Launch (Windows, recommended)
+### Install and start (Windows, one click)
+
+Once the venv is set up (above), install the HUD as an app that starts
+everything for you:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1                    # from the repo root
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -StartWithWindows  # also start at sign-in
+```
+
+This needs the .NET 8 SDK or newer. It publishes the Body (one exe, about
+2 MB) to `%LOCALAPPDATA%\Programs\JARVIS` and points it at this repo's
+`jarvis_v1`. It also adds a **JARVIS** shortcut to the Start Menu and the
+Desktop. No admin rights are needed.
+
+Double-click the shortcut and the Body does what `run.ps1` does, with no
+console windows:
+
+- If a JARVIS Brain is already running (you started one by hand), it uses that
+  one and never stops it.
+- Otherwise it runs the same preflight: is Ollama answering, and are the models
+  pulled? If Ollama is installed but not running, it starts it.
+- Then it starts the Brain hidden, in wake mode. Set `brain_mode` to `text` in
+  `body.settings.json` for text mode.
+- If something is missing, it says so on the HUD and in a Windows notification
+  instead of starting a broken Brain.
+- If the Brain crashes, it is restarted, at most 3 times in 5 minutes, and then
+  it tells you.
+- PhoneBox is started too when `config.yaml` enables it and it isn't already
+  running.
+
+From the tray icon (right-click):
+
+- **Restart brain**.
+- **Open logs folder**: `%LOCALAPPDATA%\JARVIS`, holding `body.log`,
+  `brain.log` and `ollama.log`, each rotated at 5 MB.
+- **Start with Windows**.
+- **Quit**: asks the Brain to shut down cleanly (BBP close 1000; it is killed
+  only if it hangs), then stops Ollama and PhoneBox only if the Body started
+  them.
+
+`Jarvis.Body.exe --quit` does the same as the tray's Quit. Run `install.ps1`
+again after pulling changes to update the app; `uninstall.ps1` removes the
+shortcuts and the startup entry (`-RemoveFiles` also deletes the installed
+app). Settings are in [`body/README.md`](body/README.md#settings-optional).
+
+### Launch (Windows, from a terminal)
 
 `run.ps1` uses the project's `venv` interpreter and runs preflight checks
 (Python, voice dependencies, Ollama — started automatically if installed but not
@@ -260,7 +306,9 @@ bbp:
 
 On first run the Brain creates a shared auth token at `data/bbp_token`, readable
 only by your user and never committed. Then start the HUD (`dotnet run --project
-body/src/Jarvis.Body`), or watch the raw events with the probe:
+body/src/Jarvis.Body`), or watch the raw events with the probe. The installed
+app ([Install and start](#install-and-start-windows-one-click)) needs no
+config change: a Brain it starts always has BBP on.
 
 ```bash
 python -m tools.bbp_probe
@@ -386,7 +434,7 @@ are skipped via `pytest.importorskip`):
 
 ```bash
 cd jarvis_v1
-pytest tests/ -v          # 459 tests
+pytest tests/ -v          # ~690 tests
 ruff check .              # lint incl. tests/ (CI-blocking)
 ```
 
@@ -399,7 +447,7 @@ C# Body (`body/`) on Windows.
 ```
 jarvis_v1/
 ├── main.py            # V2 entry point
-├── run.ps1            # Windows launcher (preflight + mode/version flags)
+├── run.ps1            # terminal launcher (preflight + mode/version flags)
 ├── pyproject.toml     # pinned deps + ruff/pytest/mypy config
 ├── core/              # config (dataclasses + config.yaml loader)
 ├── core_common/       # shared primitives: EventBus, events, SpeakingGuard
@@ -416,13 +464,15 @@ jarvis_v1/
 ├── infra/             # resource monitor (VRAM/RAM watchdog)
 ├── memory/            # V3 vault: vault, indexer, embeddings, web_rag
 ├── data/              # offline FineWeb index builder
-├── tests/             # pytest suite (459 tests)
+├── tests/             # pytest suite
 └── tools/             # diagnostics: wake_check, mic_smoke, mic_check, voice_test,
-                       #   bbp_probe (fake Body), desktop_bench
+                       #   bbp_probe (fake Body), desktop_bench; preflight
+                       #   (the Body launcher's config/model check)
 ```
 
 Next to `jarvis_v1/`: `protocol/` holds the Brain–Body Protocol JSON Schemas,
-`body/` the C# Windows HUD, and [`docs/`](docs/) the project documents.
+`body/` the C# Windows HUD and launcher, `install.ps1` / `uninstall.ps1` install
+it as an app, and [`docs/`](docs/) the project documents.
 
 A deeper module-by-module map is in
 [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md).

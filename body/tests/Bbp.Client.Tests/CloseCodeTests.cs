@@ -94,6 +94,29 @@ public class CloseCodeTests
         Assert.Equal([(0.5, 1), (1, 2)], clock.Waits);
     }
 
+    [Fact]
+    public async Task SessionEnded_ReportsTheCloseCode_OnlyForWelcomedSessions()
+    {
+        using var cts = new CancellationTokenSource();
+        var opts = Options();
+        var factory = new FakeFactory(n => n switch
+        {
+            1 => WelcomeThen(s => s.ServerClose(1000, "brain shutting down")),
+            2 => RejectToken(),
+            _ => null,
+        });
+        var clock = new Clock(cts, 10, opts, () => factory.Attempts, authPollNeverEnds: true);
+        var client = new BbpClient(opts, Brain.Validator, factory, clock.Delay);
+        var ended = new List<int?>();
+        client.SessionEnded += code => { lock (ended) ended.Add(code); };
+        client.StateChanged += (s, _) => { if (s == ConnectionState.AuthFailed) cts.Cancel(); };
+
+        await Run(client, cts);
+
+        Assert.Equal(2, factory.Attempts);
+        Assert.Equal([1000], ended);                                    // the rejected hello isn't a session
+    }
+
     // ── 4401 ───────────────────────────────────────────────────────────────
 
     [Fact]

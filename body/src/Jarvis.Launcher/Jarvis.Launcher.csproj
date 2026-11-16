@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Starting the rest of JARVIS from the Body: Ollama, the Brain and PhoneBox
+       as hidden child processes, supervised, logged, and stopped on quit (only
+       what the Body started). No UI here; Jarvis.Body shows the state. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <AssemblyName>Jarvis.Launcher</AssemblyName>
+    <RootNamespace>Jarvis.Launcher</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Jarvis.Launcher.Tests" />
+  </ItemGroup>
+</Project>

@@ -21,7 +21,7 @@
         <Border.ContextMenu>
             <ContextMenu>
                 <MenuItem Header="Hide HUD (tray icon brings it back)" Click="OnHide" />
-                <MenuItem Header="Quit JARVIS Body" Click="OnQuit" />
+                <MenuItem Header="Quit JARVIS" Click="OnQuit" />
             </ContextMenu>
         </Border.ContextMenu>
         <StackPanel>

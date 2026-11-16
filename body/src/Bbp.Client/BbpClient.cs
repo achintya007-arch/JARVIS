@@ -82,6 +82,10 @@ public sealed class BbpClient
 
     public event Action<WelcomePayload>? Welcomed;
 
+    /// <summary>A welcomed session ended: the close code, or null if the
+    /// connection was lost (1000 = the Brain shut down cleanly).</summary>
+    public event Action<int?>? SessionEnded;
+
     /// <summary>Every validated event from the Brain.</summary>
     public event Action<Envelope>? EventReceived;
 
@@ -122,6 +126,7 @@ public sealed class BbpClient
                 {
                     _backoff.Reset();
                     immediateUsed = false;
+                    SessionEnded?.Invoke(attempt.CloseCode);
                 }
 
                 if (attempt.CloseCode == Protocol.CloseCodes.Auth)

@@ -165,13 +165,17 @@ class Brain:
     def _text_mode(self) -> bool:
         return getattr(self.config, "mode", "wake") == "text"
 
+    def _managed(self) -> bool:
+        """Started by the Body launcher (core_v3/managed.py): stdin is its control pipe."""
+        return bool(getattr(getattr(self, "config", None), "managed", False))
+
     async def _confirm_request(self, request):
         """A gated tool asks. The broker races the Body dialogs against your
         voice (voice mode, unless the mic is muted) or the console (text mode)."""
         text_mode = self._text_mode()
         channels = {}
-        if text_mode:
-            channels["text"] = self._console_answer
+        if text_mode and not self._managed():
+            channels["text"] = self._console_answer      # managed: the launcher owns stdin
         elif self._orchestrator is not None and not self._orchestrator.muted:
             channels["voice"] = self._orchestrator_answer
         result = await self._confirmations.ask(request, channels)
@@ -263,6 +267,12 @@ class Brain:
             await asyncio.shield(self.stop())
 
     async def _text_loop(self) -> None:
+        if self._managed():
+            # No console: typed input arrives from the HUD (input.text). Run
+            # until the launcher stops us (the main task is cancelled).
+            log.info("Text mode under the launcher: type in the HUD.")
+            await asyncio.Event().wait()
+            return
         print("JARVIS V3 (text mode). Type a message, Ctrl+C to exit.\n", flush=True)
         asked_question = False
         while not self._stopped:

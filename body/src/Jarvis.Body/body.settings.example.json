@@ -1,5 +1,11 @@
 {
   "url": "ws://127.0.0.1:8765/bbp",
   "token_path": null,
-  "hotkey": "Ctrl+Alt+J"
+  "hotkey": "Ctrl+Alt+J",
+  "jarvis_root": null,
+  "python_path": null,
+  "brain_mode": "wake",
+  "autostart_brain": true,
+  "ollama_path": null,
+  "phonebox_path": null
 }

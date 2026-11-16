@@ -319,7 +319,7 @@ class Config:
         # Env override — lets the run script pick a mode without editing config,
         # e.g. JARVIS_MODE=text for keyboard testing with no microphone.
         env_mode = os.environ.get("JARVIS_MODE")
-        if env_mode in ("text", "voice", "hotword"):
+        if env_mode in ("wake", "text", "voice", "hotword"):
             config.mode = env_mode
 
         return config

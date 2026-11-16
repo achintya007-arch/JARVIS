@@ -80,5 +80,8 @@ public partial class MainWindow : Window
 
     private void OnHide(object sender, RoutedEventArgs e) => Hide();
 
-    private void OnQuit(object sender, RoutedEventArgs e) => Application.Current.Shutdown();
+    /// <summary>The same as the tray's Quit: stops what the Body started, then exits.</summary>
+    public event Action? QuitRequested;
+
+    private void OnQuit(object sender, RoutedEventArgs e) => QuitRequested?.Invoke();
 }
